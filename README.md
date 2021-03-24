@@ -1,15 +1,12 @@
 # P2HNNS - Point-to-Hyperplane Nearest Neighbor Search
 
 <img src="p2h-overview.jpg"/>
----
 
 Welcome to the **P2HNNS** GitHub!
 
 Given a set of data points and a hyperplane query, the problem of Point-to-Hyperplane Nearest Neighbor Search (P2HNNS) aims to find the nearest data point to the hyperplane query. It has plenty of applications in large-scale active learning with SVMs, maximum margin clustering, large-margin dimensionality reduction, etc.
 
-**P2HNNS** is a toolbox for the problem of P2HNNS. This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere]() in [SIGMOD 2021](). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [EH](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [BH](https://icml.cc/Conferences/2012/papers/16.pdf), and [MH](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
-
-
+**P2HNNS** is a toolbox for the problem of P2HNNS. This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere](https://github.com/HuangQiang/P2HNNS) in [SIGMOD 2021](https://2021.sigmod.org/). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [Embedding Hyperplane hashing (EH)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [Bilinear Hyperplane hashing (BH)](https://icml.cc/Conferences/2012/papers/16.pdf), and [Multilinear Hyperplane hashing (MH)](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
 
 ## Datasets and Queries
 
@@ -37,16 +34,16 @@ sudo apt-get install gcc-8 (optional)
 To compile the c++ code, please type commands as follows:
 
 ```bash
-git clone https://github.com/HuangQiang/P2HNNS
+git clone https://github.com/HuangQiang/P2HNNS.git
 cd P2HNNS/methods/
 make
 ```
 
 ## Usages
 
-We provide the bash scripts to reproduce all of experiments reported in the SIGMOD 2021 paper.
+Assume you have cloned the project and you are in the folder `P2HNNS/`. We provide bash scripts to reproduce all of experiments reported in our SIGMOD 2021 paper.
 
-#### Step 1: Get the Datasets and Generate Hyperplane Queries
+### Step 1: Get the Datasets and Generate Hyperplane Queries
 
 Please download the [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) and copy them to the directory `data/bin/original/`. For example, when you get `Msong.bin`, please move it to `data/bin/original/Msong.bin`.
 
@@ -57,7 +54,7 @@ cd data/bin/original/
 bash run.sh
 ```
 
-#### Step 2: Reproduce Experiments
+### Step 2: Reproduce Experiments
 
 You can reproduce all of the experiments with the following commands:
 
@@ -66,11 +63,11 @@ cd methods
 bash run_all.sh
 ```
 
-#### Step 3: Draw Figures
+### Step 3: Draw Figures
 
-Finally, we provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to reproduce all of the figures appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher verison) with numpy, scipy, and matplotlib installed. If you did not have **numpy, scipy, and matplotlib**, please first use `pip` install them before the next step.
+Finally, we provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to reproduce all of the figures appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher verison) with numpy, scipy, and matplotlib installed. If you did not have **numpy, scipy, and matplotlib**, please first use `pip` to install them before the next step.
 
-Once everything is ready, you can type commands as follows to draw the figures with the experimental results.
+Once everything is ready, with the experimental results from Step 2, you can type commands as follows to reproduce all of the figures.
 
 ```batch
 python3 plot.py
@@ -81,7 +78,7 @@ python3 plot_heatmap.py
 
 Please use the following reference to cite when you use **P2HNNS** in your paper.
 
-```
+```tex
 @inproceedings{huang2021point,
   title={Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere},
   author={Huang, Qiang and Lei, Yifan and Tung, Anthony KH},
