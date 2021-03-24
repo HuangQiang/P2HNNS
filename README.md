@@ -1,25 +1,19 @@
-# P2HNNS
+# P2HNNS - Point-to-Hyperplane Nearest Neighbor Search
 
-## Introduction
+<img src="p2h-overview.jpg"/>
+---
 
-The paper for this package is accepted by SIGMOD 2021
+Welcome to the **P2HNNS** GitHub!
 
-```bath
-Qiang Huang, Yifan Lei, and Anthony K. H. Tung. Point-to-Hyperplane Nearest Neighbor 
-Search Beyond the Unit Hypersphere. In Proceedings of the 2021 ACM SIGMOD/PODS 
-International Conference on Management of Data, 2021.
-```
+Given a set of data points and a hyperplane query, the problem of Point-to-Hyperplane Nearest Neighbor Search (P2HNNS) aims to find the nearest data point to the hyperplane query. It has plenty of applications in large-scale active learning with SVMs, maximum margin clustering, large-margin dimensionality reduction, etc.
 
-This package provides the implementations and experiments of `NH` and `FH` for Point-to-Hyperplane Nearest Neighbor Search (P2HNNS) in high-dimensional Euclidean spaces. We also implement three state-of-the-art hyperplane hashing schemes `EH`, `BH`, and `MH` and two heuristic linear scan methods Random-Scan and Sorted-Scan for comparison.
+**P2HNNS** is a toolbox for the problem of P2HNNS. This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere]() in [SIGMOD 2021](). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [EH](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [BH](https://icml.cc/Conferences/2012/papers/16.pdf), and [MH](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
+
+
 
 ## Datasets and Queries
 
-We use five real-life datasets `Yelp`, `Music-100`, `GloVe`, `Tiny-1M`, and `Msong` in the experiments. For each dataset, we generate 100 hyperplane queries for evaluations. 
-
-The datasets and queries can be found by the follow link:
-https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing
-
-The statistics of datasets and queries are summarized as follows.
+We use five real-life [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) ***Yelp***, ***Music-100***, ***GloVe***, ***Tiny-1M***, and ***Msong*** in the experiments. For each dataset, we generate 100 hyperplane queries for evaluations. The statistics of datasets and queries are summarized as follows.
 
 | Datasets  | #Data Objects | Dimensionality | #Queries | Data Size | Type   |
 | --------- | ------------- | -------------- | -------- | --------- | ------ |
@@ -43,11 +37,12 @@ sudo apt-get install gcc-8 (optional)
 To compile the c++ code, please type commands as follows:
 
 ```bash
-cd methods
+git clone https://github.com/HuangQiang/P2HNNS
+cd P2HNNS/methods/
 make
 ```
 
-## Run Experiments
+## Usages
 
 We provide the bash scripts to reproduce all of experiments reported in the SIGMOD 2021 paper.
 
@@ -55,14 +50,14 @@ We provide the bash scripts to reproduce all of experiments reported in the SIGM
 
 Please download the [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) and copy them to the directory `data/bin/original/`. For example, when you get `Msong.bin`, please move it to `data/bin/original/Msong.bin`.
 
-Once you finish copying the datasets to `data/bin/original/`, you can get the datasets and hyperplane queries (from `data/bin/` and `data/bin_normalized/`) with the following commands:
+Once you finish copying the datasets to `data/bin/original/`, you can get the datasets and hyperplane queries from `data/bin/` and `data/bin_normalized/` with the following commands:
 
 ```bash
 cd data/bin/original/
 bash run.sh
 ```
 
-#### Step 2: Run Experiments
+#### Step 2: Reproduce Experiments
 
 You can reproduce all of the experiments with the following commands:
 
@@ -73,13 +68,26 @@ bash run_all.sh
 
 #### Step 3: Draw Figures
 
-Finally, to reproduce all results, we also provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to draw the figures appeared in the SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher verison) with numpy, scipy, and matplotlib installed. If you did not have `numpy, scipy, and matplotlib`, please first use `pip` install them before the next step.
+Finally, we provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to reproduce all of the figures appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher verison) with numpy, scipy, and matplotlib installed. If you did not have **numpy, scipy, and matplotlib**, please first use `pip` install them before the next step.
 
 Once everything is ready, you can type commands as follows to draw the figures with the experimental results.
 
-```bash
+```batch
 python3 plot.py
 python3 plot_heatmap.py
+```
+
+## Reference
+
+Please use the following reference to cite when you use **P2HNNS** in your paper.
+
+```
+@inproceedings{huang2021point,
+  title={Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere},
+  author={Huang, Qiang and Lei, Yifan and Tung, Anthony KH},
+  booktitle={SIGMOD},
+  year={2021}
+}
 ```
 
 Please contact me (huangq@comp.nus.edu.sg) if you meet any issue. Thank you.
