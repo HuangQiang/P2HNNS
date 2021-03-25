@@ -971,7 +971,7 @@ if __name__ == '__main__':
 
     # 4. plot parameters
     chosen_top_k  = 10
-    datasets      = ['Music', 'Msong', 'Yelp', 'GloVe100', 'Tiny1M']
+    datasets      = ['GloVe100', 'Music', 'Msong', 'Yelp', 'Tiny1M']
     input_folder  = "results/"
     output_folder = "figures/param/"
     for dataset in datasets:

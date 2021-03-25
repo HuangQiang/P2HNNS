@@ -4,9 +4,9 @@
 
 Welcome to the **P2HNNS** GitHub!
 
-Given a set of data points and a hyperplane query, the problem of Point-to-Hyperplane Nearest Neighbor Search (P2HNNS) aims to find the nearest data point to the hyperplane query. It has plenty of applications in large-scale active learning with SVMs, maximum margin clustering, large-margin dimensionality reduction, etc.
+**P2HNNS** is a toolbox for the problem of Point-to-Hyperplane Nearest Neighbor Search (P2HNNS). Given a set of data points and a hyperplane query, the problem of P2HNNS aims to find the nearest data point to the hyperplane query. It has plenty of applications in large-scale active learning with SVMs, maximum margin clustering, large-margin dimensionality reduction, etc.
 
-**P2HNNS** is a toolbox for the problem of P2HNNS. This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere](https://github.com/HuangQiang/P2HNNS) in [SIGMOD 2021](https://2021.sigmod.org/). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [Embedding Hyperplane hashing (EH)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [Bilinear Hyperplane hashing (BH)](https://icml.cc/Conferences/2012/papers/16.pdf), and [Multilinear Hyperplane hashing (MH)](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
+This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere](https://github.com/HuangQiang/P2HNNS) in [SIGMOD 2021](https://2021.sigmod.org/). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [Embedding Hyperplane hashing (EH)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [Bilinear Hyperplane hashing (BH)](https://icml.cc/Conferences/2012/papers/16.pdf), and [Multilinear Hyperplane hashing (MH)](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
 
 ## Datasets and Queries
 
@@ -22,7 +22,7 @@ We use five real-life [datasets](https://drive.google.com/drive/folders/1aBFV4fe
 
 ## Compilation
 
-This source package requires ```g++-8``` with ```c++17``` support. Before the compilation, please check whether the `g++-8` is installed. If not, please install it first. We provide a way to install `g++-8` in Ubuntu 18.04 as follows:
+This toolbox requires ```g++-8``` with ```c++17``` support. Before the compilation, please check whether the `g++-8` is installed. If not, please install it first. We provide a way to install `g++-8` in Ubuntu 18.04 as follows.
 
 ```bash
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
@@ -31,26 +31,26 @@ sudo apt-get install g++-8
 sudo apt-get install gcc-8 (optional)
 ```
 
-To compile the c++ code, please type commands as follows:
+To compile the c++ source codes, please type commands as follows:
 
 ```bash
 git clone https://github.com/HuangQiang/P2HNNS.git
 cd P2HNNS/methods/
-make
+make -j
 ```
 
 ## Usages
 
-Assume you have cloned the project and you are in the folder `P2HNNS/`. We provide bash scripts to reproduce all of experiments reported in our SIGMOD 2021 paper.
+Suppose you have cloned the project and you are in the folder `P2HNNS/`. We provide bash scripts to reproduce all of the experiments reported in our SIGMOD 2021 paper.
 
 ### Step 1: Get the Datasets and Generate Hyperplane Queries
 
-Please download the [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) and copy them to the directory `data/bin/original/`. For example, when you get `Msong.bin`, please move it to `data/bin/original/Msong.bin`.
+Please download the [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) and copy them to the directory `data/original/`. For example, when you get `Msong.bin`, please move it to the path `data/original/Msong.bin`.
 
-Once you finish copying the datasets to `data/bin/original/`, you can get the datasets and hyperplane queries from `data/bin/` and `data/bin_normalized/` with the following commands:
+Once you finish copying the datasets to `data/original/`, you can get the datasets and generate the hyperplane queries from `data/bin/` and `data/bin_normalized/` with the following commands:
 
 ```bash
-cd data/bin/original/
+cd data/original/
 bash run.sh
 ```
 
@@ -65,13 +65,20 @@ bash run_all.sh
 
 ### Step 3: Draw Figures
 
-Finally, we provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to reproduce all of the figures appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher verison) with numpy, scipy, and matplotlib installed. If you did not have **numpy, scipy, and matplotlib**, please first use `pip` to install them before the next step.
+Finally, we provide python scripts (ie, `plot.py` and `plot_heatmap.py`) to reproduce all of the figures that appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher versions) with **numpy, scipy, and matplotlib** installed. If you did not have them, please use `pip` to install them first.
 
-Once everything is ready, with the experimental results from Step 2, you can type commands as follows to reproduce all of the figures.
+With the experimental results from Step 2, you can reproduce all of the figures with the following commands.
 
 ```batch
 python3 plot.py
 python3 plot_heatmap.py
+```
+
+or
+
+```batch
+python plot.py
+python plot_heatmap.py
 ```
 
 ## Reference
