@@ -1,4 +1,4 @@
-# P2HNNS - Point-to-Hyperplane Nearest Neighbor Search
+# P2HNNS: Point-to-Hyperplane Nearest Neighbor Search
 
 <img src="p2h-overview.jpg"/>
 
@@ -10,7 +10,7 @@ This toolbox provides the implementations and experiments of our work [Point-to-
 
 ## Datasets and Queries
 
-We use five real-life [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) ***Yelp***, ***Music-100***, ***GloVe***, ***Tiny-1M***, and ***Msong*** in the experiments. For each dataset, we generate 100 hyperplane queries for evaluations. The statistics of datasets and queries are summarized as follows.
+We use five real-life [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing) Yelp, Music-100, GloVe, Tiny-1M, and Msong in the experiments. For each dataset, we generate 100 hyperplane queries for evaluations. The statistics of datasets and queries are summarized as follows.
 
 | Datasets  | #Data Objects | Dimensionality | #Queries | Data Size | Type   |
 | --------- | ------------- | -------------- | -------- | --------- | ------ |
@@ -65,7 +65,7 @@ bash run_all.sh
 
 ### Step 3: Draw Figures
 
-Finally, we provide python scripts (ie, `plot.py` and `plot_heatmap.py`) to reproduce all of the figures that appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher versions) with **numpy, scipy, and matplotlib** installed. If you did not have them, please use `pip` to install them first.
+Finally, we provide python scripts (i.e., `plot.py` and `plot_heatmap.py`) to reproduce all of the figures that appeared in our SIGMOD 2021 paper. These two scripts require `python 3.7` (or higher versions) with **numpy, scipy, and matplotlib** installed. If not, please use `pip` to install them first.
 
 With the experimental results from Step 2, you can reproduce all of the figures with the following commands.
 
@@ -83,7 +83,7 @@ python plot_heatmap.py
 
 ## Reference
 
-Please use the following reference to cite when you use **P2HNNS** in your paper.
+Please use the following bibtex to cite this work when you use **P2HNNS** in your paper.
 
 ```tex
 @inproceedings{huang2021point,
@@ -94,4 +94,4 @@ Please use the following reference to cite when you use **P2HNNS** in your paper
 }
 ```
 
-Please contact me (huangq@comp.nus.edu.sg) if you meet any issue. Thank you.
+It is welcome to contact me (huangq@comp.nus.edu.sg) if you meet any issue. Thank you.
