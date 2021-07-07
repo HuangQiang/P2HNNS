@@ -32,27 +32,27 @@ void Random_Scan::display()         // display parameters
 }
 
 // -----------------------------------------------------------------------------
-int Random_Scan::nns(				// point-to-hyperplane NNS
-	int   top_k,						// top-k value
-	int   nc,							// number of total candidates
-	const float *query,					// input query
-	MinK_List *list)					// top-k results (return)
+int Random_Scan::nns(               // point-to-hyperplane NNS
+    int   top_k,                        // top-k value
+    int   nc,                           // number of total candidates
+    const float *query,                 // input query
+    MinK_List *list)                    // top-k results (return)
 {
     int verif_cnt = std::min(nc + top_k - 1, n_pts_);
     for (int i = 0; i < verif_cnt; ++i) {
         int   idx  = random_id_[i];
-		float dist = fabs(calc_inner_product(dim_, &data_[idx*dim_], query));
-		list->insert(dist, idx + 1);
+        float dist = fabs(calc_inner_product(dim_, &data_[idx*dim_], query));
+        list->insert(dist, idx + 1);
     }
     return verif_cnt;
 }
 
 // -----------------------------------------------------------------------------
 Sorted_Scan::Sorted_Scan(           // constructor
-	int   n,					        // number of data objects
-	int   d,						    // dimension of data objects
-	const float *data)                  // input data
-    : n_pts_(n), dim_(d), data_(data)			
+    int   n,                            // number of data objects
+    int   d,                            // dimension of data objects
+    const float *data)                  // input data
+    : n_pts_(n), dim_(d), data_(data)            
 {
     // sort data objects by their l2-norms in ascending order
     Result *arr = new Result[n];
@@ -71,7 +71,7 @@ Sorted_Scan::Sorted_Scan(           // constructor
 }
 
 // -----------------------------------------------------------------------------
-Sorted_Scan::~Sorted_Scan()		    // destructor
+Sorted_Scan::~Sorted_Scan()         // destructor
 {
     delete[] sorted_id_; sorted_id_ = NULL;
 }
@@ -86,31 +86,31 @@ void Sorted_Scan::display()         // display parameters
 }
 
 // -----------------------------------------------------------------------------
-int Sorted_Scan::nns(				// point-to-hyperplane NNS
-	int   top_k,						// top-k value
-	int   nc,							// number of total candidates
-	const float *query,					// input query
-	MinK_List *list)					// top-k results (return)
+int Sorted_Scan::nns(               // point-to-hyperplane NNS
+    int   top_k,                        // top-k value
+    int   nc,                           // number of total candidates
+    const float *query,                 // input query
+    MinK_List *list)                    // top-k results (return)
 {
     int verif_cnt = std::min(nc + top_k - 1, n_pts_);
     for (int i = 0; i < verif_cnt; ++i) {
         int   idx  = sorted_id_[i];
-		float dist = fabs(calc_inner_product(dim_, &data_[idx*dim_], query));
-		list->insert(dist, idx + 1);
+        float dist = fabs(calc_inner_product(dim_, &data_[idx*dim_], query));
+        list->insert(dist, idx + 1);
     }
     return verif_cnt;
 }
 
 // -----------------------------------------------------------------------------
-Angular_Hash::Angular_Hash(			// constructor
-	int   n,							// number of data objects
-	int   d,							// dimension of data objects
-	int   M, 							// #proj vecotr used for a single hasher
-	int   m,							// #single hasher of the compond hasher
-	int   l,							// #hash tables
-	float b,                            // interval ratio
-	const float *data)					// input data
-	: n_pts_(n), dim_(d), M_(M), m_(m), l_(l), b_(b), data_(data)
+Angular_Hash::Angular_Hash(         // constructor
+    int   n,                            // number of data objects
+    int   d,                            // dimension of data objects
+    int   M,                            // #proj vecotr used for a single hasher
+    int   m,                            // #single hasher of the compond hasher
+    int   l,                            // #hash tables
+    float b,                            // interval ratio
+    const float *data)                  // input data
+    : n_pts_(n), dim_(d), M_(M), m_(m), l_(l), b_(b), data_(data)
 {
     // -------------------------------------------------------------------------
     //  sort data objects by their l2-norms in ascending order
@@ -139,31 +139,31 @@ Angular_Hash::Angular_Hash(			// constructor
 
     // -------------------------------------------------------------------------
     //  divide datasets into blocks and build hash tables for each block
-	// -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
     int start = 0;
-	while (start < n_pts_) {
-		// partition block
-		float max_radius  = arr[start].key_ / b;
-		int   block_index = start, cnt = 0;
-		while (block_index < n_pts_ && arr[block_index].key_ < max_radius) {
-			++block_index;
-			if (++cnt >= MAX_BLOCK_NUM) break;
-		}
+    while (start < n_pts_) {
+        // partition block
+        float max_radius  = arr[start].key_ / b;
+        int   block_index = start, cnt = 0;
+        while (block_index < n_pts_ && arr[block_index].key_ < max_radius) {
+            ++block_index;
+            if (++cnt >= MAX_BLOCK_NUM) break;
+        }
         // printf("%d: cnt = %d, start = %d\n", block_num_.size(), cnt, start);
         
-		// add a block
+        // add a block
         Basic_Hash *hash = NULL;
         if (M == 1) {
-    		hash = new EH_Hash(cnt, d, m, l, (const int*) sorted_id_ + start, 
-                (const float *) sorted_data + start*d);
+            hash = new EH_Hash(cnt, d, m, l, (const int*) sorted_id_+start, 
+                (const float *) sorted_data+start*d);
         }
         else if (M == 2) {
-            hash = new BH_Hash(cnt, d, m, l, (const int*) sorted_id_ + start, 
-                (const float *) sorted_data + start*d);
+            hash = new BH_Hash(cnt, d, m, l, (const int*) sorted_id_+start, 
+                (const float *) sorted_data+start*d);
         }
         else {
-            hash = new MH_Hash(cnt, d, M, m, l, (const int*) sorted_id_ + start, 
-                (const float *) sorted_data + start*d);
+            hash = new MH_Hash(cnt, d, M, m, l, (const int*) sorted_id_+start, 
+                (const float *) sorted_data+start*d);
         }
         hash_.push_back(hash);
         block_num_.push_back(cnt);
@@ -179,20 +179,20 @@ Angular_Hash::Angular_Hash(			// constructor
 }
 
 // -----------------------------------------------------------------------------
-Angular_Hash::~Angular_Hash()		// destructor
+Angular_Hash::~Angular_Hash()       // destructor
 {
-	if (!hash_.empty()) {
-		for (int i = 0; i < hash_.size(); ++i) {
-			delete hash_[i]; hash_[i] = NULL;
-		}
-		hash_.clear(); hash_.shrink_to_fit();
-	}
+    if (!hash_.empty()) {
+        for (int i = 0; i < hash_.size(); ++i) {
+            delete hash_[i]; hash_[i] = NULL;
+        }
+        hash_.clear(); hash_.shrink_to_fit();
+    }
     delete[] sorted_id_; sorted_id_ = NULL;
     block_num_.clear(); block_num_.shrink_to_fit();
 }
 
 // -------------------------------------------------------------------------
-void Angular_Hash::display()		// display parameters
+void Angular_Hash::display()        // display parameters
 {
     printf("Parameters of %s:\n", M_ > 2 ? "MH" : (M_ == 2 ? "BH" : "EH"));
     printf("    n       = %d\n",   n_pts_);
@@ -205,27 +205,27 @@ void Angular_Hash::display()		// display parameters
 }
 
 // -----------------------------------------------------------------------------
-int Angular_Hash::nns(				// point-to-hyperplane NNS
-    int   top_k,		    			// top-k value
-	int   cand,							// #candidates
-    const float *query,		       		// input query
-    MinK_List *list)				    // top-k results (return)
-{	
-	// -------------------------------------------------------------------------
-	//  point-to-hyperplane NNS
-	// -------------------------------------------------------------------------
-	int n_cand = cand + top_k - 1;
-	int verif_cnt = 0;
+int Angular_Hash::nns(              // point-to-hyperplane NNS
+    int   top_k,                        // top-k value
+    int   cand,                         // #candidates
+    const float *query,                 // input query
+    MinK_List *list)                    // top-k results (return)
+{    
+    // -------------------------------------------------------------------------
+    //  point-to-hyperplane NNS
+    // -------------------------------------------------------------------------
+    int n_cand = cand + top_k - 1;
+    int verif_cnt = 0;
 
-	for (int i = 0; i < block_num_.size(); ++i) {
+    for (int i = 0; i < block_num_.size(); ++i) {
         // check #candidates according to the ratio of block size
-		int block_cand = (int) ceil((float) block_num_[i] * n_cand / n_pts_);
-		block_cand = std::min(block_cand, n_cand - verif_cnt);
-		verif_cnt += hash_[i]->nns(block_cand, data_, query, list);
+        int block_cand = (int) ceil((float) block_num_[i] * n_cand / n_pts_);
+        block_cand = std::min(block_cand, n_cand - verif_cnt);
+        verif_cnt += hash_[i]->nns(block_cand, data_, query, list);
 
-		if (verif_cnt >= n_cand) break;
-	}
-	return verif_cnt;
+        if (verif_cnt >= n_cand) break;
+    }
+    return verif_cnt;
 }
 
 } // end namespace p2h
