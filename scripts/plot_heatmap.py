@@ -136,7 +136,7 @@ if __name__ == '__main__':
 
     m = 100; interval = 5
     datasets      = ['Yelp', 'Music', 'GloVe100', 'Tiny1M', 'Msong']
-    input_folder  = 'results/'
-    output_folder = 'figures/distr/'
+    input_folder  = '../results/'
+    output_folder = '../figures/distr/'
     plot_heatmap(m, interval, datasets, input_folder, output_folder)
     

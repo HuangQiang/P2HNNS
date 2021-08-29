@@ -1,8 +1,7 @@
 # ------------------------------------------------------------------------------
 #  Compile with C++ 17
 # ------------------------------------------------------------------------------
-SRCS=pri_queue.cc util.cc qalsh.cc rqalsh.cc baseline.cc eh.cc bh.cc mh.cc \
-	fh.cc nh.cc nh_counting.cc ap2h.cc main.cc
+SRCS=pri_queue.cc util.cc rqalsh.cc main.cc
 OBJS=${SRCS:.cc=.o}
 
 CXX=g++-8 -std=c++17

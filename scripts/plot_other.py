@@ -857,9 +857,9 @@ def plot_nh_s(chosen_top_k, datasets, input_folder, output_folder, \
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    chosen_top_k = 10
-    input_folder = "results/"
-    output_folder = "figures/param/"
+    chosen_top_k  = 10
+    input_folder  = "../results/"
+    output_folder = "../figures/param/"
     datasets = ['Yelp', 'GloVe100']
 
     plot_nh_t(chosen_top_k, datasets, input_folder, output_folder, fig_height=3.4)

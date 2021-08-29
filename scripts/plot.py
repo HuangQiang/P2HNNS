@@ -944,14 +944,14 @@ if __name__ == '__main__':
     chosen_top_ks = [1,5,10,20,50,100]
 
     # 1. plot curves of time vs. recall & fraction vs. recall
-    input_folder  = "results/"
-    output_folder = "figures/competitors/"
+    input_folder  = "../results/"
+    output_folder = "../figures/competitors/"
     methods       = ['FH', 'FH_Minus', 'NH', 'BH', 'MH', 'Random_Scan', 'Sorted_Scan']
     plot_time_fraction_recall(chosen_top_k, methods, input_folder, output_folder)
 
     # 2. plot curves of time vs. index (size and time) & time vs. k
-    input_folder  = "results/"
-    output_folder = "figures/competitors/"
+    input_folder  = "../results/"
+    output_folder = "../figures/competitors/"
     methods       = ['FH', 'FH_Minus', 'NH', 'BH', 'MH', 'Random_Scan', 'Sorted_Scan']
     recall_level  = 80 # 80 70 60 50
     size_x_scales = [0.3,0.3,0.3,0.3,0.3]; time_x_scales = [0.1,0.1,0.1,0.3,0.05]
@@ -959,8 +959,8 @@ if __name__ == '__main__':
         time_x_scales, methods, input_folder, output_folder)
 
     # 3. plot curves of time vs. recall & time vs. indexing time
-    input_folder  = "results/"
-    output_folder = "figures/sampling/"
+    input_folder  = "../results/"
+    output_folder = "../figures/sampling/"
     methods       = ['FH', 'FH_Minus', 'NH', 'FH_wo_S', 'FH_Minus_wo_S', 'NH_wo_S']
     # recall_level  = 50; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
     # recall_level  = 60; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
@@ -972,14 +972,14 @@ if __name__ == '__main__':
     # 4. plot parameters
     chosen_top_k  = 10
     datasets      = ['GloVe100', 'Music', 'Msong', 'Yelp', 'Tiny1M']
-    input_folder  = "results/"
-    output_folder = "figures/param/"
+    input_folder  = "../results/"
+    output_folder = "../figures/param/"
     for dataset in datasets:
         plot_params(chosen_top_k, dataset, input_folder, output_folder)
 
     # 5. plot curves of time vs. recall & time vs. indexing time for normalized data
-    input_folder  = "results_normalized/"
-    output_folder = "figures/normalized/"
+    input_folder  = "../results_normalized/"
+    output_folder = "../figures/normalized/"
     methods       = ['FH', 'NH', 'Orig_BH', 'Orig_MH']
     # recall_level  = 50; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]
     # recall_level  = 60; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]

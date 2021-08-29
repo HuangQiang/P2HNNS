@@ -8,30 +8,31 @@ RQALSH::RQALSH(                     // constructor
     int   d,                            // dimension of data objects
     int   m,                            // #hash tables
     const int *index)
-    : n_pts_(n), dim_(d), m_(m), index_(index) 
+    : n_(n), dim_(d), m_(m), index_(index) 
 {
     // generate hash functions
-    a_ = new float[m * d];
-    for (int i = 0; i < m * d; ++i) a_[i] = gaussian(0.0f, 1.0f);
+    a_ = new float[m*d];
+    for (int i = 0; i < m*d; ++i) a_[i] = gaussian(0.0f, 1.0f);
     
     // allocate space for tables
-    tables_ = new Result[m * n];
+    tables_ = new Result[m*n];
 }
 
 // -----------------------------------------------------------------------------
 RQALSH::~RQALSH()                   // destructor
 {
-    delete[] a_;      a_      = NULL;
-    delete[] tables_; tables_ = NULL;
+    delete[] a_;
+    delete[] tables_;
 }
 
-// -------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 float RQALSH::calc_hash_value(      // calc hash value
     int   d,                            // dimension for calc hash value
-    int   tid,                          // hash table id
+    int   tid,                          // hash table ida
     const float *data)                  // input data
 {
-    return calc_inner_product(d, &a_[tid*dim_], data);
+    const float *a = &a_[tid*dim_];
+    return calc_inner_product2<float>(d, data, a);
 }
 
 // -----------------------------------------------------------------------------
@@ -42,13 +43,31 @@ float RQALSH::calc_hash_value(      // calc hash value
 {
     const float *a = &a_[tid*dim_];
 
+    int   idx = -1;
     float val = 0.0f;
     for (int i = 0; i < d; ++i) {
-        int   idx   = data[i].id_;
-        float coord = data[i].key_;
-        val += a[idx] * coord;
+        idx = data[i].id_;
+        val += a[idx] * data[i].key_;
     }
     return val;
+}
+
+// -----------------------------------------------------------------------------
+float RQALSH::calc_hash_value(      // calc hash value
+    int   d,                            // dimension for calc hash value
+    int   tid,                          // hash table id
+    float last,                         // the last coordinate of input data
+    const Result *data)                 // input data
+{
+    const float *a = &a_[tid*dim_];
+
+    int   idx = -1;
+    float val = 0.0f;
+    for (int i = 0; i < d; ++i) {
+        idx = data[i].id_;
+        val += a[idx] * data[i].key_;
+    }
+    return val + a[dim_-1] * last;
 }
 
 // -----------------------------------------------------------------------------
@@ -60,23 +79,23 @@ int RQALSH::fns(                    // furthest neighbor search
     std::vector<int> &cand_list)        // candidates (return)
 {
     cand_list.clear();
-    cand = std::min(cand, n_pts_);
+    cand = std::min(cand, n_);
     
     // simply check all data if #candidates is equal to the cardinality
-    if (cand == n_pts_) {
-        cand_list.resize(n_pts_);
-        for (int i = 0; i < n_pts_; ++i) {
+    if (cand == n_) {
+        cand_list.resize(n_);
+        for (int i = 0; i < n_; ++i) {
             if (index_) cand_list[i] = index_[i];
             else cand_list[i] = i;
         }
-        return n_pts_;
+        return n_;
     }
 
     // init parameters
-    int  *freq    = new int[n_pts_]; memset(freq, 0,     n_pts_*sizeof(int));
-    bool *checked = new bool[n_pts_]; memset(checked, false, n_pts_*sizeof(bool));
-    bool *b_flag  = new bool[m_]; memset(b_flag, true, m_*sizeof(bool));
-    bool *r_flag  = new bool[m_]; memset(r_flag, true, m_*sizeof(bool));
+    int  *freq    = new int[n_];  memset(freq,    0,     n_*sizeof(int));
+    bool *checked = new bool[n_]; memset(checked, false, n_*sizeof(bool));
+    bool *b_flag  = new bool[m_]; memset(b_flag,  true,  m_*sizeof(bool));
+    bool *r_flag  = new bool[m_]; memset(r_flag,  true,  m_*sizeof(bool));
 
     int   *l_pos  = new int[m_];
     int   *r_pos  = new int[m_];
@@ -85,7 +104,7 @@ int RQALSH::fns(                    // furthest neighbor search
     for (int i = 0; i < m_; ++i) {
         q_val[i] = calc_hash_value(dim_, i, query);
         l_pos[i] = 0;  
-        r_pos[i] = n_pts_ - 1;
+        r_pos[i] = n_ - 1;
     }
 
     // -------------------------------------------------------------------------
@@ -116,7 +135,7 @@ int RQALSH::fns(                    // furthest neighbor search
 
                 int    cnt = -1, lpos = -1, rpos = -1;
                 float  q_v = q_val[j], ldist = -1.0f, rdist = -1.0f;
-                Result *table = &tables_[j*n_pts_];
+                Result *table = &tables_[j*n_];
 
                 // -------------------------------------------------------------
                 //  step 2.1: scan left part of bucket
@@ -132,7 +151,6 @@ int RQALSH::fns(                    // furthest neighbor search
                     int id = table[lpos].id_;
                     if (++freq[id] >= separation_threshold && !checked[id]) {
                         checked[id] = true;
-                        
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;
@@ -155,7 +173,6 @@ int RQALSH::fns(                    // furthest neighbor search
                     int id = table[rpos].id_;
                     if (++freq[id] >= separation_threshold && !checked[id]) {
                         checked[id] = true;
-                        
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;
@@ -215,8 +232,8 @@ float RQALSH::find_radius(          // find proper radius
     std::vector<float> list;
     for (int i = 0; i < m_; ++i) {
         if (lpos[i] < rpos[i]) {
-            list.push_back(fabs(tables_[i*n_pts_+lpos[i]].key_ - q_v[i]));
-            list.push_back(fabs(tables_[i*n_pts_+rpos[i]].key_ - q_v[i]));
+            list.push_back(fabs(tables_[i*n_+lpos[i]].key_ - q_v[i]));
+            list.push_back(fabs(tables_[i*n_+rpos[i]].key_ - q_v[i]));
         }
     }
     // sort the array in ascending order 
@@ -242,21 +259,21 @@ int RQALSH::fns(                    // furthest neighbor search
     std::vector<int> &cand_list)        // candidates (return)
 {
     cand_list.clear();
-    cand = std::min(cand, n_pts_);
+    cand = std::min(cand, n_);
 
     // simply check all data if #candidates is equal to the cardinality
-    if (cand == n_pts_) {
-        cand_list.resize(n_pts_);
-        for (int i = 0; i < n_pts_; ++i) {
+    if (cand == n_) {
+        cand_list.resize(n_);
+        for (int i = 0; i < n_; ++i) {
             if (index_) cand_list[i] = index_[i];
             else cand_list[i] = i;
         }
-        return n_pts_;
+        return n_;
     }
 
     // init parameters
-    int  *freq    = new int[n_pts_]; memset(freq, 0,     n_pts_*sizeof(int));
-    bool *checked = new bool[n_pts_]; memset(checked, false, n_pts_*sizeof(bool));
+    int  *freq    = new int[n_]; memset(freq, 0, n_*sizeof(int));
+    bool *checked = new bool[n_]; memset(checked, false, n_*sizeof(bool));
     bool *b_flag  = new bool[m_]; memset(b_flag, true, m_*sizeof(bool));
     bool *r_flag  = new bool[m_]; memset(r_flag, true, m_*sizeof(bool));
 
@@ -265,9 +282,9 @@ int RQALSH::fns(                    // furthest neighbor search
     float *q_val  = new float[m_];
     
     for (int i = 0; i < m_; ++i) {
-        q_val[i] = calc_hash_value(sample_dim, i, query);
-        l_pos[i] = 0;  
-        r_pos[i] = n_pts_ - 1;
+        q_val[i] = calc_hash_value(sample_dim, i, 0.0f, query);
+        l_pos[i] = 0;
+        r_pos[i] = n_ - 1;
     }
 
     // -------------------------------------------------------------------------
@@ -298,7 +315,7 @@ int RQALSH::fns(                    // furthest neighbor search
 
                 int    cnt = -1, lpos = -1, rpos = -1;
                 float  q_v = q_val[j], ldist = -1.0f, rdist = -1.0f;
-                Result *table = &tables_[j*n_pts_];
+                Result *table = &tables_[j*n_];
 
                 // -------------------------------------------------------------
                 //  step 2.1: scan left part of bucket
@@ -314,7 +331,6 @@ int RQALSH::fns(                    // furthest neighbor search
                     int id = table[lpos].id_;
                     if (++freq[id] >= separation_threshold && !checked[id]) {
                         checked[id] = true;
-                        
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;
@@ -337,7 +353,6 @@ int RQALSH::fns(                    // furthest neighbor search
                     int id = table[rpos].id_;
                     if (++freq[id] >= separation_threshold && !checked[id]) {
                         checked[id] = true;
-                        
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;

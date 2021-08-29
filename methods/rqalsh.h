@@ -22,11 +22,11 @@ namespace p2h {
 // -----------------------------------------------------------------------------
 class RQALSH {
 public:
-    int   n_pts_;                   // number of input data
+    int   n_;                       // number of input data
     int   dim_;                     // dimension of input data
     int   m_;                       // #hash tables
-    const int *index_ = NULL;       // index of input data
-    float  *a_;                     // hash functions
+    const int *index_;              // index of input data
+    float *a_;                      // hash functions
     Result *tables_;                // hash tables
 
     // -------------------------------------------------------------------------
@@ -43,12 +43,19 @@ public:
     float calc_hash_value(          // calc hash value
         int   d,                        // dimension for calc hash value
         int   tid,                      // hash table id
-        const float *data);             // one data object
+        const float *data);             // one data object o'
 
     // -------------------------------------------------------------------------
     float calc_hash_value(          // calc hash value
         int   d,                        // dimension for calc hash value
         int   tid,                      // hash table id
+        const Result *data);            // sample data
+
+    // -------------------------------------------------------------------------
+    float calc_hash_value(          // calc hash value
+        int   d,                        // dimension for calc hash value
+        int   tid,                      // hash table id
+        float last,                     // the last coordinate of input data
         const Result *data);            // sample data
 
     // -------------------------------------------------------------------------
@@ -80,7 +87,7 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += sizeof(float)*m_*dim_; // a_
-        ret += sizeof(Result)*m_*n_pts_; // tables_
+        ret += sizeof(Result)*m_*n_;  // tables_
         return ret;
     }
 };
