@@ -29,7 +29,7 @@ const int   RANDOM_SEED             = 6;
 
 const std::vector<int> TOPKs        = { 1,5,10,20,50,100 };
 const int   MAXK                    = TOPKs.back();
-const int   M                       = 50;    // statistics
+const int   M                       = 100;   // statistics
 const int   SCAN_SIZE               = 64;    // RQALSH and QALSH
 const int   MAX_BLOCK_NUM           = 25000; // FH
 

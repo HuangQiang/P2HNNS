@@ -124,11 +124,12 @@ int read_bin_data(                  // read data set (binary) from disk
     FILE *fp = fopen(fname, "rb");
     if (!fp) { printf("Could not open %s\n", fname); return 1; }
     
+    fread(data, sizeof(DType), (uint64_t) n*d, fp);
     // TODO need to modify the format of data sets
-    for (int i = 0; i < (uint64_t) n*d; i += d) {
-        fread(&data[i], sizeof(DType), d-1, fp);
-        data[i+d-1] = 1.0f;
-    }
+    // for (int i = 0; i < (uint64_t) n*d; i += d) {
+    //     fread(&data[i], sizeof(DType), d-1, fp);
+    //     data[i+d-1] = 1.0f;
+    // }
     fclose(fp);
     gettimeofday(&g_end_time, NULL);
 

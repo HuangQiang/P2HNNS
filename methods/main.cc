@@ -241,7 +241,7 @@ int main(int nargs, char **args)
             printf("qn        = %d\n", qn);
         }
         else if (strcmp(args[cnt], "-d") == 0) {
-            d = atoi(args[++cnt]) + 1; assert(d > 1); // add 1 
+            d = atoi(args[++cnt]); assert(d > 1);
             printf("d         = %d\n", d);
         }
         else if (strcmp(args[cnt], "-I") == 0) {
