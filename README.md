@@ -6,7 +6,7 @@ Welcome to the **P2HNNS** GitHub!
 
 **P2HNNS** is a toolbox for the problem of Point-to-Hyperplane Nearest Neighbor Search (P2HNNS). Given a set of data points and a hyperplane query, the problem of P2HNNS aims to find the nearest data point to the hyperplane query. It has plenty of applications in large-scale active learning with SVMs, maximum margin clustering, large-margin dimensionality reduction, etc.
 
-This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere](https://dl.acm.org/doi/pdf/10.1145/3448016.3457240) in [SIGMOD 2021](https://2021.sigmod.org/). It also implements three state-of-the-art hyperplane hashing schemes (i.e., [Embedding Hyperplane hashing (EH)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [Bilinear Hyperplane hashing (BH)](https://icml.cc/Conferences/2012/papers/16.pdf), and [Multilinear Hyperplane hashing (MH)](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods Random-Scan and Sorted-Scan.
+This toolbox provides the implementations and experiments of our work [Point-to-Hyperplane Nearest Neighbor Search Beyond the Unit Hypersphere](https://dl.acm.org/doi/pdf/10.1145/3448016.3457240) in [SIGMOD 2021](https://2021.sigmod.org/). We also implement three state-of-the-art hyperplane hashing schemes (i.e., [Embedding Hyperplane hashing (EH)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.185.4684&rep=rep1&type=pdf), [Bilinear Hyperplane hashing (BH)](https://icml.cc/Conferences/2012/papers/16.pdf), and [Multilinear Hyperplane hashing (MH)](https://openaccess.thecvf.com/content_cvpr_2016/papers/Liu_Multilinear_Hyperplane_Hashing_CVPR_2016_paper.pdf)) and two heuristic linear scan methods *Random-Scan* and *Sorted-Scan*.
 
 ## Datasets and Queries
 
@@ -57,6 +57,8 @@ Once you finish copying the datasets to `data/original/`, you can get the datase
 cd data/original/
 bash run.sh
 ```
+
+Currently, we also directly provide the datasets and hyperplane queries for `bin/` and `bin_normalized/` via [datasets](https://drive.google.com/drive/folders/1aBFV4feZcLnQkDR7tjC-Kj7g3MpfBqv7?usp=sharing). Users can download the datasets and copy the `data/` directory.
 
 ### Step 2: Reproduce Experiments
 
