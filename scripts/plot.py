@@ -10,6 +10,9 @@ from scipy.interpolate import interp1d
 from itertools import chain, count
 from collections import defaultdict
 
+from os import makedirs
+from os.path import isdir, isfile, join
+
 from plot_util  import *
 from plot_other import *
 
@@ -21,11 +24,9 @@ method_labels_map = {
     'FH':               'FH',
     'FH_Minus':         'FH$^-$',
     'NH':               'NH',
-    'NH_Counting':      'NH_Counting',
     'FH_wo_S':          'FH-wo-S',
     'FH_Minus_wo_S':    'FH$^{-}$-wo-S',
     'NH_wo_S':          'NH-wo-S', 
-    'NH_Counting_wo_S': 'NH-Counting-wo-S', 
     'EH':               'EH',
     'Orig_EH':          'EH',
     'BH':               'BH', 
@@ -953,21 +954,21 @@ if __name__ == '__main__':
     input_folder  = "../results/"
     output_folder = "../figures/competitors/"
     methods       = ['FH', 'FH_Minus', 'NH', 'BH', 'MH', 'Random_Scan', 'Sorted_Scan']
-    recall_level  = 80 # 80 70 60 50
     size_x_scales = [0.3,0.3,0.3,0.3,0.3]; time_x_scales = [0.1,0.1,0.1,0.3,0.05]
-    plot_time_index_k(chosen_top_k, chosen_top_ks, recall_level, size_x_scales,
-        time_x_scales, methods, input_folder, output_folder)
+    recall_levels = [80,70,60,50]
+    for recall_level in recall_levels:
+        plot_time_index_k(chosen_top_k, chosen_top_ks, recall_level, size_x_scales,
+            time_x_scales, methods, input_folder, output_folder)
 
     # 3. plot curves of time vs. recall & time vs. indexing time
     input_folder  = "../results/"
     output_folder = "../figures/sampling/"
     methods       = ['FH', 'FH_Minus', 'NH', 'FH_wo_S', 'FH_Minus_wo_S', 'NH_wo_S']
-    # recall_level  = 50; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
-    # recall_level  = 60; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
-    # recall_level  = 70; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
-    recall_level  = 80; time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
-    plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, methods, 
-        input_folder, output_folder)
+    time_x_scales = [0.2, 0.1, 0.1, 0.2, 0.02]
+    recall_levels = [80,70,60,50]
+    for recall_level in recall_levels:
+        plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, 
+            methods, input_folder, output_folder)
 
     # 4. plot parameters
     chosen_top_k  = 10
@@ -981,9 +982,19 @@ if __name__ == '__main__':
     input_folder  = "../results_normalized/"
     output_folder = "../figures/normalized/"
     methods       = ['FH', 'NH', 'Orig_BH', 'Orig_MH']
-    # recall_level  = 50; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]
-    # recall_level  = 60; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]
-    # recall_level  = 70; time_x_scales = [0.1, 0.2, 0.1, 0.1, 0.04]
+    
+    recall_level  = 50; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]
+    plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, methods, 
+        input_folder, output_folder)
+
+    recall_level  = 60; time_x_scales = [0.1, 0.1, 0.1, 0.05, 0.02]
+    plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, methods, 
+        input_folder, output_folder)
+
+    recall_level  = 70; time_x_scales = [0.1, 0.2, 0.1, 0.1, 0.04]
+    plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, methods, 
+        input_folder, output_folder)
+    
     recall_level  = 80; time_x_scales = [0.1, 0.2, 0.1, 0.1, 0.08]
     plot_time_recall_indextime(chosen_top_k, recall_level, time_x_scales, methods, 
         input_folder, output_folder)
