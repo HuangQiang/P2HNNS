@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <vector>
 #include "../lccs_bucket/bucketAlg/lcs_int.h"
 
@@ -27,8 +28,8 @@ public:
 
     // -------------------------------------------------------------------------
     NH(                             // constructor
-        int   n,                        // number of input data
-        int   d,                        // dimension of input data
+        int   n,                        // number of data objects
+        int   d,                        // dimension of data objects
         int   m,                        // #hasher
         int   s,                        // scale factor of dimension
         float w,                        // bucket width
@@ -58,7 +59,7 @@ public:
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
     int   sample_dim_;              // sample dimension
     int   nh_dim_;                  // new data dimension after transformation
@@ -71,7 +72,7 @@ protected:
     float *projb_;                  // random shifts
     LCCS bucketerp_;                // hash tables
     NDArray<2, int32_t> data_sigs_; // data signatures
-    
+
     // -------------------------------------------------------------------------
     void get_sig_data_partial(      // get signature of data
         const DType *data,              // input data object o
@@ -105,7 +106,7 @@ NH<DType>::NH(                      // constructor
     int   s,                            // scale factor of dimension
     float w,                            // bucket width
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), sample_dim_(dim_*s), nh_dim_(d*(d+1)/2+1), m_(m), 
+    : n_(n), dim_(d), sample_dim_(dim_*s), nh_dim_(d*(d+1)/2+1), m_(m), 
     w_(w), data_(data), bucketerp_(m, 1)
 {
     // init hash functions: proja_ and projb_
@@ -118,19 +119,20 @@ NH<DType>::NH(                      // constructor
     
     // build hash tables for the hash values of data objects
     M_ = MINREAL;
-    float *projs = new float[n*m];
+    float *projs = new float[(uint64_t)n*m];
     float *norms = new float[n];
     
     // calc partial hash values
     for (int i = 0; i < n; ++i) {
-        get_sig_data_partial(&data[(uint64_t)i*d], norms[i], &projs[i*m]);
+        get_sig_data_partial(&data[(uint64_t)i*d], norms[i], 
+            &projs[(uint64_t)i*m]);
         if (norms[i] > M_) M_ = norms[i];
     }
     // calc the final hash values with the last coordinate
     data_sigs_.resize({n, m});
     SigType **data_sigs_ptr = data_sigs_.to_ptr();
     for (int i = 0; i < n; ++i) {
-        float *vals = &projs[i*m];
+        float *vals = &projs[(uint64_t)i*m];
         float last_coord = sqrt(M_ - norms[i]);
 
         for (int j = 0; j < m; ++j) {
@@ -244,7 +246,7 @@ template<class DType>
 void NH<DType>::display()      // display parameters
 {
     printf("Parameters of NH:\n");
-    printf("n          = %d\n", n_pts_);
+    printf("n          = %d\n", n_);
     printf("dim        = %d\n", dim_);
     printf("sample_dim = %d\n", sample_dim_);
     printf("m          = %d\n", m_);
@@ -261,17 +263,16 @@ int NH<DType>::nns(            // point-to-hyperplane NNS
     const float *query,                 // input query
     MinK_List *list)                    // top-k results (return)
 {
-    // query transformation
     std::vector<SigType> sigs(m_);
     get_sig_query(query, &sigs[0]);
 
-    // verify the true distance for candidates
+    // printf("cand=%d\n", cand);
     int   verif_cnt = 0, step = (cand+m_-1)/m_;
     float dist = -1.0f;
     bucketerp_.for_candidates(step, sigs, [&](int idx) {
-        dist = fabs(calc_inner_product2<DType>(dim_, &data_[(uint64_t)idx*dim_],
-            query));
-        list->insert(dist, idx + 1);
+        // verify the true distance of idx
+        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        list->insert(dist, idx+1);
         ++verif_cnt;
     });
     return verif_cnt;
@@ -403,7 +404,7 @@ public:
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                   // number of data objects
     int   dim_;                     // dimension of data objects
     int   nh_dim_;                  // new data dimension after transformation
     int   m_;                       // #single hasher of the compond hasher
@@ -455,7 +456,7 @@ NH_wo_S<DType>::NH_wo_S(            // constructor
     int   m,                            // #hashers
     float w,                            // bucket width
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), nh_dim_(d*(d+1)/2+1), m_(m), w_(w), data_(data), 
+    : n_(n), dim_(d), nh_dim_(d*(d+1)/2+1), m_(m), w_(w), data_(data), 
     bucketerp_(m, 1)
 {
     // init hash functions: proja_ and projb_
@@ -467,9 +468,9 @@ NH_wo_S<DType>::NH_wo_S(            // constructor
     for(int i = 0; i < m; ++i) projb_[i] = uniform(0, w_);
     
     // calc l2-norms of f(o) and the max l2-norm-sqr
-    float *norms = new float[n_pts_]; // l2-norm-sqr of f(o)
+    float *norms = new float[n]; // l2-norm-sqr of f(o)
     M_ = MINREAL;
-    for (int i = 0; i < n_pts_; ++i) {
+    for (int i = 0; i < n; ++i) {
         norms[i] = calc_transform_data_norm(&data[(uint64_t)i*dim_]);
         if (M_ < norms[i]) M_ = norms[i];
     }
@@ -511,7 +512,7 @@ void NH_wo_S<DType>::get_sig_data(  // get signature of data
     // calc the signature of nh_data
     for (int i = 0; i < m_; ++i) {
         const float *proja = (const float*) &proja_[i*nh_dim_];
-        float val = calc_inner_product2<float>(nh_dim_, nh_data, proja);
+        float val = calc_ip2<float>(nh_dim_, nh_data, proja);
         sig[i] = SigType((val + projb_[i])/w_);
     }
     delete[] nh_data;
@@ -553,7 +554,7 @@ template<class DType>
 void NH_wo_S<DType>::display()      // display parameters
 {
     printf("Parameters of NH_wo_S:\n");
-    printf("n        = %d\n", n_pts_);
+    printf("n        = %d\n", n_);
     printf("dim      = %d\n", dim_);
     printf("m        = %d\n", m_);
     printf("w        = %f\n", w_);
@@ -577,9 +578,8 @@ int NH_wo_S<DType>::nns(            // point-to-hyperplane NNS
     float dist = -1.0f;
     bucketerp_.for_candidates(step, sigs, [&](int idx) {
         // verify the true distance of idx
-        dist = fabs(calc_inner_product2<DType>(dim_, &data_[(uint64_t)idx*dim_],
-            query));
-        list->insert(dist, idx + 1);
+        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        list->insert(dist, idx+1);
         ++verif_cnt;
     });
     return verif_cnt;
@@ -598,8 +598,7 @@ void NH_wo_S<DType>::get_sig_query( // get signature of query
     // calc the signatures of nh_query
     for (int i = 0; i < m_; ++i) {
         float *proja = &proja_[i*nh_dim_];
-        float val = calc_inner_product2<float>(nh_dim_, nh_query, 
-            (const float*) proja);
+        float val = calc_ip2<float>(nh_dim_, nh_query, (const float*) proja);
         sig[i] = SigType((val + projb_[i])/w_);
     }
     delete[] nh_query;
@@ -640,7 +639,7 @@ float NH_wo_S<DType>::calc_transform_query_norm(// calc l2-norm-sqr of g(q)
         tmp = SQR(query[i]);
         norm2 += tmp; norm4 += SQR(tmp);
     }
-    return 2*norm2*norm2 - norm4;
+    return 2 * norm2 * norm2 - norm4;
 }
 
 } // end namespace p2h

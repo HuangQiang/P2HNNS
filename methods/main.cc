@@ -18,68 +18,70 @@ void usage()                        // display the usage of this package
         "-------------------------------------------------------------------\n"
         " Usage of the Package for Point-to Hyperplane NNS                  \n"
         "-------------------------------------------------------------------\n"
-        "-alg   {integer}  options of algorithms\n"
-        "-n     {integer}  number of data objects\n"
-        "-qn    {integer}  number of queries\n"
-        "-d     {integer}  data dimension\n"
-        "-I     {integer}  is normalized or not\n"
-        "-m     {integer}  #hash tables (FH, FH-, NH)\n"
+        " -alg  {integer}  options of algorithms\n"
+        " -n    {integer}  number of data objects\n"
+        " -qn   {integer}  number of queries\n"
+        " -d    {integer}  data dimension\n"
+        " -I    {integer}  is normalized or not\n"
+        " -m    {integer}  #hash tables (FH, FH-, NH)\n"
         "                  #single hasher of compond hasher (EH, BH, MH)\n"
-        "-l     {integer}  #hash tables (EH, BH, MH)\n"
-        "-M     {integer}  #proj vector used for a single hasher (MH)\n"
-        "-s     {integer}  scale factor of dimension (FH, FH-, NH)\n"
-        "-b     {float}    interval ratio (FH)\n"
-        "-w     {float}    bucket width (NH)\n"
-        "-cf    {string}   name of configuration\n"
-        "-dt    {string}   data type\n"
-        "-dn    {string}   name of data set\n"
-        "-ds    {string}   address of data set\n"
-        "-qs    {string}   address of query set\n"
-        "-ts    {string}   address of truth set\n"
-        "-op    {string}   output path\n"
+        " -l    {integer}  #hash tables (EH, BH, MH)\n"
+        " -M    {integer}  #proj vector used for a single hasher (MH)\n"
+        " -s    {integer}  scale factor of dimension (FH, FH-, NH)\n"
+        " -b    {float}    interval ratio (FH)\n"
+        " -w    {float}    bucket width (NH)\n"
+        " -cf   {string}   name of configuration\n"
+        " -dt   {string}   data type\n"
+        " -dn   {string}   name of data set\n"
+        " -ds   {string}   address of data set\n"
+        " -qs   {string}   address of query set\n"
+        " -ts   {string}   address of truth set\n"
+        " -op   {string}   output path\n"
         "\n"
         "-------------------------------------------------------------------\n"
         " The Options of Algorithms                                         \n"
         "-------------------------------------------------------------------\n"
-        "0  - Ground-Truth & Histogram & Heatmap\n"
-        "     -alg 0 -n -qn -d -dt -dn -ds -qs -ts -op\n"
+        " 0  - Ground-Truth & Histogram & Heatmap\n"
+        "      -alg 0 -n -qn -d -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "1  - Linear-Scan\n"
-        "     -alg 1 -n -qn -d -dt -dn -ds -qs -ts -op\n"
+        " 1  - Linear-Scan\n"
+        "      -alg 1 -n -qn -d -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "2  - Random-Scan (Random Selection and Scan)\n"
-        "     -alg 2 -n -qn -d -cf -dt -dn -ds -qs -ts -op\n"
+        " 2  - Random-Scan (Random Selection and Scan)\n"
+        "      -alg 2 -n -qn -d -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "3  - Sorted-Scan (Sort and Scan)\n"
-        "     -alg 3 -n -qn -d -cf -dt -dn -ds -qs -ts -op\n"
+        " 3  - Sorted-Scan (Sort and Scan)\n"
+        "      -alg 3 -n -qn -d -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "4  - EH based on Multi-Partition (or Original EH)\n"
-        "     -alg 4 -n -qn -d -I -m -l -b -cf -dt -dn -ds -qs -ts -op\n"
+        " 4  - EH based on Multi-Partition (or Original EH)\n"
+        "      -alg 4 -n -qn -d -I -m -l -b -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "5  - BH based on Multi-Partition (or Original BH)\n"
-        "     -alg 5 -n -qn -d -I -m -l -b -cf -dt -dn -ds -qs -ts -op\n"
+        " 5  - BH based on Multi-Partition (or Original BH)\n"
+        "      -alg 5 -n -qn -d -I -m -l -b -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "6  - MH based on Mutli-Partition (or Original MH)\n"
-        "     -alg 6 -n -qn -d -I -m -l -M -b -cf -dt -dn -ds -qs -ts -op\n"
+        " 6  - MH based on Mutli-Partition (or Original MH)\n"
+        "      -alg 6 -n -qn -d -I -m -l -M -b -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "7  - FH (Furthest Hyperpalne Hash)\n"
-        "     -alg 7 -n -qn -d -m -s -b -cf -dt -dn -ds -qs -ts -op\n"
+        " 7  - FH (Furthest Hyperpalne Hash)\n"
+        "      -alg 7 -n -qn -d -m -s -b -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "8  - FH^- (Furthest Hyperpalne Hash without Multi-Partition)\n"
-        "     -alg 8 -n -qn -d -m -s -cf -dt -dn -ds -qs -ts -op\n"
+        " 8  - FH^- (Furthest Hyperpalne Hash without Multi-Partition)\n"
+        "      -alg 8 -n -qn -d -m -s -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "9  - NH (Nearest Hyperpalne Hash with LCCS-LSH)\n"
-        "     -alg 9 -n -qn -d -m -w -s -cf -dt -dn -ds -qs -ts -op\n"
+        " 9  - NH (Nearest Hyperpalne Hash with LCCS-LSH)\n"
+        "      -alg 9 -n -qn -d -m -w -s -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "10 - FH without Randomized Sampling\n"
-        "     -alg 10 -n -qn -d -m -b -cf -dt -dn -ds -qs -ts -op\n"
+        " 10 - FH without Randomized Sampling\n"
+        "      -alg 10 -n -qn -d -m -b -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "11 - FH^- without Randomized Sampling\n"
-        "     -alg 11 -n -qn -d -m -cf -dt -dn -ds -qs -ts -op\n"
+        " 11 - FH^- without Randomized Sampling\n"
+        "      -alg 11 -n -qn -d -m -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
-        "12 - NH without Randomized Sampling\n"
-        "     -alg 12 -n -qn -d -m -w -cf -dt -dn -ds -qs -ts -op\n"
+        " 12 - NH without Randomized Sampling\n"
+        "      -alg 12 -n -qn -d -m -w -cf -dt -dn -ds -qs -ts -op\n"
         "\n"
+        "-------------------------------------------------------------------\n"
+        " Author: Qiang Huang (huangq@comp.nus.edu.sg)                      \n"
         "-------------------------------------------------------------------\n"
         "\n\n\n");
 }
@@ -105,24 +107,25 @@ void interface(                     // interface for calling function
     const char *truth_set,              // address of ground truth file
     const char *path)                   // output path
 {
-    // -------------------------------------------------------------------------
     // read data set, query set (and ground truth results)
-    // -------------------------------------------------------------------------
+    gettimeofday(&g_start_time, NULL);
     DType *data = new DType[(uint64_t) n*d];
     if (read_bin_data<DType>(n, d, data_set, data)) exit(1);
 
-    DType *query = new DType[(uint64_t) qn*d];
-    if (read_bin_query<DType>(qn, d, query_set, query)) exit(1);
+    DType *query = new DType[qn*d];
+    if (read_bin_data<DType>(qn, d, query_set, query)) exit(1);
 
     Result *R = NULL; // ground truth results
     if (alg > 0) {
         R = new Result[qn*MAXK];
         if (read_ground_truth(qn, truth_set, R)) exit(1);
     }
+    gettimeofday(&g_end_time, NULL);
+    float running_time = g_end_time.tv_sec - g_start_time.tv_sec + 
+        (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
+    printf("Read Data & Query: %f Seconds\n", running_time);
 
-    // -------------------------------------------------------------------------
     // methods
-    // -------------------------------------------------------------------------
     switch (alg) {
     case 0:
         ground_truth<DType>(n, qn, d, truth_set, path, (const DType*) data,

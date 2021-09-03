@@ -28,52 +28,30 @@ int linear_scan(                    // Linear Scan
     // -------------------------------------------------------------------------
     fprintf(fp, "%s:\n", method_name);
     float *norm_q = new float[d];
+    float dp = -1.0f;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
-    printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-        "Fraction (%%)\n");
+    HEAD(method_name)
     for (int top_k : TOPKs) {
         gettimeofday(&g_start_time, NULL);
         MinK_List* list = new MinK_List(top_k);
-
-        g_ratio     = 0.0f;
-        g_recall    = 0.0f;
-        g_precision = 0.0f;
-        g_fraction  = 0.0f;
+        init_global_metric();
+        
         for (int i = 0; i < qn; ++i) {
             list->reset();
-            get_normalized_query<DType>(d, &query[(uint64_t)i*d], norm_q);
+            get_normalized_query<DType>(d, &query[i*d], norm_q);
             for (int j = 0; j < n; ++j) {
-                float dp = fabs(calc_inner_product2<DType>(d, 
-                    &data[(uint64_t)j*d], norm_q));
+                dp = fabs(calc_ip2<DType>(d, &data[(uint64_t) j*d], norm_q));
                 list->insert(dp, j+1);
             }
-            g_recall    += calc_recall(top_k, &R[i*MAXK], list);
-            g_precision += top_k * 100.0f / n;
-            g_fraction  += n * 100.0f / n;
-            g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+            update_global_metric(top_k, n, n, &R[i*MAXK], list);
         }
-        delete list; list = NULL;
+        delete list;
         gettimeofday(&g_end_time, NULL);
-        g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-            (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-        g_ratio     = g_ratio     / qn;
-        g_recall    = g_recall    / qn;
-        g_precision = g_precision / qn;
-        g_fraction  = g_fraction  / qn;
-        g_runtime   = g_runtime * 1000.0f / qn;
-
-        printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-            g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-        fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-            g_recall, g_precision, g_fraction);
+        calc_and_write_global_metric(top_k, qn, fp);
     }
-    printf("\n");
-    fprintf(fp, "\n");
-    fclose(fp);
-    delete[] norm_q;
+    FOOT(fp)
 
+    delete[] norm_q;
     return 0;
 }
 
@@ -101,19 +79,11 @@ int random_scan(                    // Random_Scan
     gettimeofday(&g_start_time, NULL);
     Random_Scan<DType> *random = new Random_Scan<DType>(n, d, data);
     random->display();
-
+    float memory = random->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = random->get_memory_usage() / 1048576.0f;
 
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
-    fprintf(fp, "%s: \n", method_name);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    fprintf(fp, "%s:\n", method_name);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -122,59 +92,28 @@ int random_scan(                    // Random_Scan
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, method_name, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = random->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = random->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   random;
+    delete random;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -202,20 +141,12 @@ int sorted_scan(                    // Sorted_Scan
     gettimeofday(&g_start_time, NULL);
     Sorted_Scan<DType> *sorted = new Sorted_Scan<DType>(n, d, data);
     sorted->display();
-
+    float memory = sorted->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = sorted->get_memory_usage() / 1048576.0f;
 
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
-    fprintf(fp, "%s: \n", method_name);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
-
+    fprintf(fp, "%s:\n", method_name);
+    write_index_info(memory, fp);
+    
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
@@ -223,59 +154,28 @@ int sorted_scan(                    // Sorted_Scan
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, method_name, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = sorted->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = sorted->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   sorted;
+    delete sorted;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -306,19 +206,11 @@ int eh(                             // Embedding Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Angular_Hash<DType> *lsh = new Angular_Hash<DType>(n, d, 1, m, l, b, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
 
     fprintf(fp, "%s: m=%d, l=%d, b=%.2f\n", method_name, m, l, b);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -327,59 +219,28 @@ int eh(                             // Embedding Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "EH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -410,19 +271,11 @@ int bh(                             // Bilinear Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Angular_Hash<DType> *lsh = new Angular_Hash<DType>(n, d, 2, m, l, b, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
 
     fprintf(fp, "%s: m=%d, l=%d, b=%.2f\n", method_name, m, l, b);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -431,59 +284,28 @@ int bh(                             // Bilinear Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "BH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -515,19 +337,11 @@ int mh(                             // Multilinear Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Angular_Hash<DType> *lsh = new Angular_Hash<DType>(n, d, M, m, l, b, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
     
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
     fprintf(fp, "%s: M=%d, m=%d, l=%d, b=%.2f\n", method_name, M, m, l, b);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -536,59 +350,28 @@ int mh(                             // Multilinear Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "MH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -619,19 +402,11 @@ int fh(                             // Furthest Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     FH<DType> *lsh = new FH<DType>(n, d, m, s, b, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, s=%d, b=%.2f\n", method_name, m, s, b);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -641,62 +416,31 @@ int fh(                             // Furthest Hyperplane Hashing
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH", l_list, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int l : l_list) {
         if (l >= m) continue;
         for (int cand : cand_list) {
-            fp = fopen(fname, "a+");
-            fprintf(fp, "l=%d, cand=%d\n", l, cand);
-            
-            printf("l=%d, cand=%d\n", l, cand);
-            printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-                "Fraction (%%)\n");
+            write_params(l, cand, fname, fp);
+            HEAD(method_name)
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
-
-                g_ratio     = 0.0f;
-                g_recall    = 0.0f;
-                g_precision = 0.0f;
-                g_fraction  = 0.0f;
+                init_global_metric();
+            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                    int   check_k = lsh->nns(top_k, l, cand, norm_q, list);
-                    float recall = 0.0f;
-                    float precision = 0.0f;
-                    calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                        precision);
-
-                    g_recall    += recall;
-                    g_precision += precision;
-                    g_fraction  += check_k * 100.0f / n;
-                    g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                    get_normalized_query<DType>(d, &query[i*d], norm_q);
+                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
-                delete list; list = NULL;
+                delete list;
                 gettimeofday(&g_end_time, NULL);
-                g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                    (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-                g_ratio     = g_ratio     / qn;
-                g_recall    = g_recall    / qn;
-                g_precision = g_precision / qn;
-                g_fraction  = g_fraction  / qn;
-                g_runtime   = g_runtime * 1000.0f / qn;
-
-                printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                    g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-                fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                    g_recall, g_precision, g_fraction);
+                calc_and_write_global_metric(top_k, qn, fp);
             }
-            printf("\n");
-            fprintf(fp, "\n");
-            fclose(fp);
+            FOOT(fp)
         }
     }
-    delete   lsh; 
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -726,19 +470,11 @@ int fh_minus(                       // FH without Multi-Partition
     gettimeofday(&g_start_time, NULL);
     FH_Minus<DType> *lsh = new FH_Minus<DType>(n, d, m, s, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-    
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
 
     fprintf(fp, "%s: m=%d, s=%d\n", method_name, m, s);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -748,62 +484,31 @@ int fh_minus(                       // FH without Multi-Partition
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH-", l_list, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int l : l_list) {
         if (l >= m) continue;
         for (int cand : cand_list) {
-            fp = fopen(fname, "a+");
-            fprintf(fp, "l=%d, cand=%d\n", l, cand);
-            
-            printf("l=%d, cand=%d\n", l, cand);
-            printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-                "Fraction (%%)\n");
+            write_params(l, cand, fname, fp);
+            HEAD(method_name)
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
-
-                g_ratio     = 0.0f;
-                g_recall    = 0.0f;
-                g_precision = 0.0f;
-                g_fraction  = 0.0f;
+                init_global_metric();
+            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                    int   check_k = lsh->nns(top_k, l, cand, norm_q, list);
-                    float recall = 0.0f;
-                    float precision = 0.0f;
-                    calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                        precision);
-        
-                    g_recall    += recall;
-                    g_precision += precision;
-                    g_fraction  += check_k * 100.0f / n;
-                    g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                    get_normalized_query<DType>(d, &query[i*d], norm_q);
+                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
-                delete list; list = NULL;
+                delete list;
                 gettimeofday(&g_end_time, NULL);
-                g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                    (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-                g_ratio     = g_ratio     / qn;
-                g_recall    = g_recall    / qn;
-                g_precision = g_precision / qn;
-                g_fraction  = g_fraction  / qn;
-                g_runtime   = g_runtime * 1000.0f / qn;
-
-                printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                    g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-                fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                    g_recall, g_precision, g_fraction);
+                calc_and_write_global_metric(top_k, qn, fp);
             }
-            printf("\n");
-            fprintf(fp, "\n");
-            fclose(fp);
+            FOOT(fp)
         }
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -831,21 +536,14 @@ int nh(                             // Nearest Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  preprocessing
     // -------------------------------------------------------------------------
+    gettimeofday(&g_start_time, NULL);
     NH<DType> *lsh = new NH<DType>(n, d, m, s, w, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, s=%d, w=%.2f\n", method_name, m, w, s);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -854,59 +552,28 @@ int nh(                             // Nearest Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "NH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -936,19 +603,11 @@ int fh_wo_s(                        // FH without Randomized Sampling
     gettimeofday(&g_start_time, NULL);
     FH_wo_S<DType> *lsh = new FH_wo_S<DType>(n, d, m, b, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, b=%.2f\n", method_name, m, b);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -958,62 +617,31 @@ int fh_wo_s(                        // FH without Randomized Sampling
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH", l_list, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int l : l_list) {
         if (l >= m) continue;
         for (int cand : cand_list) {
-            fp = fopen(fname, "a+");
-            fprintf(fp, "l=%d, cand=%d\n", l, cand);
-            
-            printf("l=%d, cand=%d\n", l, cand);
-            printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-                "Fraction (%%)\n");
+            write_params(l, cand, fname, fp);
+            HEAD(method_name)
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
-
-                g_ratio     = 0.0f;
-                g_recall    = 0.0f;
-                g_precision = 0.0f;
-                g_fraction  = 0.0f;
+                init_global_metric();
+            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                    int   check_k = lsh->nns(top_k, l, cand, norm_q, list);
-                    float recall = 0.0f;
-                    float precision = 0.0f;
-                    calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                        precision);
-
-                    g_recall    += recall;
-                    g_precision += precision;
-                    g_fraction  += check_k * 100.0f / n;
-                    g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                    get_normalized_query<DType>(d, &query[i*d], norm_q);
+                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
-                delete list; list = NULL;
+                delete list;
                 gettimeofday(&g_end_time, NULL);
-                g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                    (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-                g_ratio     = g_ratio     / qn;
-                g_recall    = g_recall    / qn;
-                g_precision = g_precision / qn;
-                g_fraction  = g_fraction  / qn;
-                g_runtime   = g_runtime * 1000.0f / qn;
-
-                printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                    g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-                fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                    g_recall, g_precision, g_fraction);
+                calc_and_write_global_metric(top_k, qn, fp);
             }
-            printf("\n");
-            fprintf(fp, "\n");
-            fclose(fp);
+            FOOT(fp)
         }
     }
-    delete   lsh; 
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -1042,19 +670,11 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
     gettimeofday(&g_start_time, NULL);
     FH_Minus_wo_S<DType> *lsh = new FH_Minus_wo_S<DType>(n, d, m, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
     
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
     fprintf(fp, "%s: m=%d\n", method_name, m);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -1064,62 +684,31 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH-", l_list, cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int l : l_list) {
         if (l >= m) continue;
         for (int cand : cand_list) {
-            fp = fopen(fname, "a+");
-            fprintf(fp, "l=%d, cand=%d\n", l, cand);
-            
-            printf("l=%d, cand=%d\n", l, cand);
-            printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-                "Fraction (%%)\n");
+            write_params(l, cand, fname, fp);
+            HEAD(method_name)
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
-
-                g_ratio     = 0.0f;
-                g_recall    = 0.0f;
-                g_precision = 0.0f;
-                g_fraction  = 0.0f;
+                init_global_metric();
+                
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                    int   check_k = lsh->nns(top_k, l, cand, norm_q, list);
-                    float recall = 0.0f;
-                    float precision = 0.0f;
-                    calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                        precision);
-        
-                    g_recall    += recall;
-                    g_precision += precision;
-                    g_fraction  += check_k * 100.0f / n;
-                    g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                    get_normalized_query<DType>(d, &query[i*d], norm_q);
+                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
-                delete list; list = NULL;
+                delete list;
                 gettimeofday(&g_end_time, NULL);
-                g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                    (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-                g_ratio     = g_ratio     / qn;
-                g_recall    = g_recall    / qn;
-                g_precision = g_precision / qn;
-                g_fraction  = g_fraction  / qn;
-                g_runtime   = g_runtime * 1000.0f / qn;
-
-                printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                    g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-                fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                    g_recall, g_precision, g_fraction);
+                calc_and_write_global_metric(top_k, qn, fp);
             }
-            printf("\n");
-            fprintf(fp, "\n");
-            fclose(fp);
+            FOOT(fp)
         }
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -1146,21 +735,14 @@ int nh_wo_s(                        // NH without Randomized Sampling
     // -------------------------------------------------------------------------
     //  preprocessing
     // -------------------------------------------------------------------------
+    gettimeofday(&g_start_time, NULL);
     NH_wo_S<DType> *lsh = new NH_wo_S<DType>(n, d, m, w, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, w=%.2f\n", method_name, m, w);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -1169,59 +751,28 @@ int nh_wo_s(                        // NH without Randomized Sampling
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "NH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -1251,19 +802,11 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Orig_EH<DType> *lsh = new Orig_EH<DType>(n, d, m, l, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, l=%d\n", method_name, m, l);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -1272,59 +815,28 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "EH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -1354,19 +866,11 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Orig_BH<DType> *lsh = new Orig_BH<DType>(n, d, m, l, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec 
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
-
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
+    
     fprintf(fp, "%s: m=%d, l=%d\n", method_name, m, l);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -1375,59 +879,28 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "BH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 
@@ -1459,19 +932,11 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
     gettimeofday(&g_start_time, NULL);
     Orig_MH<DType> *lsh = new Orig_MH<DType>(n, d, M, m, l, data);
     lsh->display();
-
+    float memory = lsh->get_memory_usage() / 1048576.0f;
     gettimeofday(&g_end_time, NULL);
-    g_indextime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec
-        - g_start_time.tv_usec) / 1000000.0f;
-    g_memory = lsh->get_memory_usage() / 1048576.0f;
     
-    printf("Indexing Time:    %f Seconds\n", g_indextime);
-    printf("Estimated Memory: %f MB\n\n", g_memory);
-
     fprintf(fp, "%s: M=%d, m=%d, l=%d\n", method_name, M, m, l);
-    fprintf(fp, "Indexing Time: %f Seconds\n", g_indextime);
-    fprintf(fp, "Estimated Memory: %f MB\n", g_memory);
-    fclose(fp);
+    write_index_info(memory, fp);
 
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
@@ -1480,59 +945,28 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "MH", cand_list)) return 1;
 
-    printf("%s for Point-to-Hyperplane NNS:\n", method_name);
     for (int cand : cand_list) {
-        fp = fopen(fname, "a+");
-        fprintf(fp, "cand=%d\n", cand);
-
-        printf("cand=%d\n", cand);
-        printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t"
-            "Fraction (%%)\n");
+        write_params(cand, fname, fp);
+        HEAD(method_name)
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
-
-            g_ratio     = 0.0f;
-            g_recall    = 0.0f;
-            g_precision = 0.0f;
-            g_fraction  = 0.0f;
+            init_global_metric();
+            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[(uint64_t) i*d], norm_q);
-                int   check_k = lsh->nns(top_k, cand, norm_q, list);
-                float recall = 0.0f;
-                float precision = 0.0f;
-                calc_pre_recall(top_k, check_k, &R[i*MAXK], list, recall, 
-                    precision);
-    
-                g_recall    += recall;
-                g_precision += precision;
-                g_fraction  += check_k * 100.0f / n;
-                g_ratio     += calc_ratio(top_k, &R[i*MAXK], list);
+                get_normalized_query<DType>(d, &query[i*d], norm_q);
+                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
-            delete list; list = NULL;
+            delete list;
             gettimeofday(&g_end_time, NULL);
-            g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
-                (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-
-            g_ratio     = g_ratio     / qn;
-            g_recall    = g_recall    / qn;
-            g_precision = g_precision / qn;
-            g_fraction  = g_fraction  / qn;
-            g_runtime   = g_runtime * 1000.0f / qn;
-
-            printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
-                g_ratio, g_runtime, g_recall, g_precision, g_fraction);
-            fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
-                g_recall, g_precision, g_fraction);
+            calc_and_write_global_metric(top_k, qn, fp);
         }
-        printf("\n");
-        fprintf(fp, "\n");
-        fclose(fp);
+        FOOT(fp)
     }
-    delete   lsh;
+    delete lsh;
     delete[] norm_q;
-
     return 0;
 }
 

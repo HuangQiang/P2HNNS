@@ -29,6 +29,15 @@ public:
     float *a_;                      // hash functions
     Result *tables_;                // hash tables
 
+    // assistant parameters for fast k-NN search
+    int   *freq_;                   // separation frequency for n data points
+    bool  *checked_;                // checked or not for n data points
+    bool  *b_flag_;                 // flag for m hash tables
+    bool  *r_flag_;                 // flag for m hash tables
+    int   *l_pos_;                  // left  positions for m hash tables
+    int   *r_pos_;                  // right positions for m hash tables
+    float *q_val_;                  // m hash values of query
+
     // -------------------------------------------------------------------------
     RQALSH(                         // constructor
         int   n,                        // number of input data
@@ -60,7 +69,7 @@ public:
 
     // -------------------------------------------------------------------------
     int fns(                        // furthest neighbor search
-        int   separation_threshold,     // separation threshold
+        int   l,                        // separation threshold
         int   cand,                     // number of candidates
         float R,                        // limited search range
         const float *query,             // query object
@@ -68,19 +77,12 @@ public:
 
     // -------------------------------------------------------------------------
     int fns(                        // furthest neighbor search
-        int   separation_threshold,     // separation threshold
+        int   l,                        // separation threshold
         int   cand,                     // number of candidates
         float R,                        // limited search range
         int   sample_dim,               // sample dimension
         const Result *query,            // query object
         std::vector<int> &cand_list);   // candidates (return)
-
-    // -------------------------------------------------------------------------
-    float find_radius(              // find proper radius
-        float w,                        // grid width                        
-        const int *lpos,                // left  position of query in hash table
-        const int *rpos,                // right position of query in hash table
-        const float *q_val);            // hash value of query
         
     // -------------------------------------------------------------------------
     uint64_t get_memory_usage() {   // get memory usage
@@ -90,6 +92,33 @@ public:
         ret += sizeof(Result)*m_*n_;  // tables_
         return ret;
     }
+
+protected:
+    // -------------------------------------------------------------------------
+    void init(                      // init assistant parameters
+        const float *query);            // query object
+    
+    // -------------------------------------------------------------------------
+    void init(                      // init assistant parameters
+        int   sample_dim,               // sample dimension
+        const Result *query);           // query object
+    
+    // -------------------------------------------------------------------------
+    void alloc();                   // alloc space for assistant parameters
+
+    // -------------------------------------------------------------------------
+    int dynamic_separation_counting(// dynamic separation counting
+        int   l,                        // separation threshold
+        int   cand,                     // number of candidates
+        float R,                        // limited search range
+        std::vector<int> &cand_list);   // candidates (return)
+
+    // -------------------------------------------------------------------------
+    float find_radius(              // find proper radius
+        float w);                       // grid width
+
+    // -------------------------------------------------------------------------
+    void free();                    // free space for assistant parameters
 };
 
 } // end namespace p2h

@@ -59,7 +59,6 @@ protected:
     int    fh_dim_;                 // new data dimension after transformation
     float  M_;                      // max l2-norm of o' after transformation
     const  DType *data_;            // original data objects
-
     RQALSH *lsh_;                   // RQALSH for fh data with sampling
 
     // -------------------------------------------------------------------------
@@ -103,20 +102,21 @@ FH_Minus<DType>::FH_Minus(          // constructor
         // calc partial hash value
         for (int j = 0; j < m; ++j) {
             float val = lsh_->calc_hash_value(sample_d, j, sample_data);
-            lsh_->tables_[j*n+i].id_  = i;
-            lsh_->tables_[j*n+i].key_ = val;
+            lsh_->tables_[(uint64_t) j*n+i].id_  = i;
+            lsh_->tables_[(uint64_t) j*n+i].key_ = val;
         }
     }
     // calc the final hash value
     for (int i = 0; i < n; ++i) {
         float tmp = sqrt(M_ - norm[i]);
         for (int j = 0; j < m; ++j) {
-            lsh_->tables_[j*n+i].key_ += lsh_->a_[(j+1)*fh_dim_-1] * tmp;
+            float last_val = lsh_->a_[(j+1)*fh_dim_-1] * tmp;
+            lsh_->tables_[(uint64_t) j*n+i].key_ += last_val;
         }
     }
     // sort hash tables in ascending order by hash values
     for (int i = 0; i < m; ++i) {
-        qsort(&lsh_->tables_[i*n], n, sizeof(Result), ResultComp);
+        qsort(&lsh_->tables_[(uint64_t) i*n], n, sizeof(Result), ResultComp);
     }
     delete[] sample_data;
     delete[] norm;
@@ -221,12 +221,13 @@ int FH_Minus<DType>::nns(           // point-to-hyperplane NNS
     int verif_cnt = lsh_->fns(l, cand+top_k-1, MINREAL, sample_d,
         (const Result*) sample_query, cand_list);
 
-    // calc true distance for candidates returned by qalsh
+    // calc the actual distance for candidates returned by rqalsh
+    int   idx  = -1;
+    float dist = -1.0f;
     for (int i = 0; i < verif_cnt; ++i) {
-        int   idx  = cand_list[i];
-        float dist = fabs(calc_inner_product2<DType>(dim_, 
-            &data_[(uint64_t)idx*dim_], query));
-        list->insert(dist, idx + 1);
+        idx  = cand_list[i];
+        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        list->insert(dist, idx+1);
     }
     delete[] sample_query;
 
@@ -333,7 +334,6 @@ protected:
     int    fh_dim_;                 // new data dimension after transformation
     float  M_;                      // max l2-norm of o' after transformation
     const  DType *data_;            // original data objects
-    
     RQALSH *lsh_;                   // RQALSH for fh data
 
     // -------------------------------------------------------------------------
@@ -376,7 +376,6 @@ FH_Minus_wo_S<DType>::FH_Minus_wo_S(// constructor
     // build hash tables for rqalsh
     float *fh_data = new float[fh_dim_];
     lsh_ = new RQALSH(n, fh_dim_, m, NULL);
-
     for (int i = 0; i < n; ++i) {
         // data transformation
         transform_data(norms[i], &data[(uint64_t) i*d], fh_data);
@@ -384,13 +383,13 @@ FH_Minus_wo_S<DType>::FH_Minus_wo_S(// constructor
         // calc the hash values
         for (int j = 0; j < m; ++j) {
             float val = lsh_->calc_hash_value(fh_dim_, j, fh_data);
-            lsh_->tables_[j*n+i].id_  = i;
-            lsh_->tables_[j*n+i].key_ = val;
+            lsh_->tables_[(uint64_t) j*n+i].id_  = i;
+            lsh_->tables_[(uint64_t) j*n+i].key_ = val;
         }
     }
     // sort hash tables in ascending order by hash values
     for (int i = 0; i < m; ++i) {
-        qsort(&lsh_->tables_[i*n], n, sizeof(Result), ResultComp);
+        qsort(&lsh_->tables_[(uint64_t) i*n], n, sizeof(Result), ResultComp);
     }
     delete[] fh_data;
     delete[] norms;
@@ -473,7 +472,7 @@ int FH_Minus_wo_S<DType>::nns(      // point-to-hyperplane NNS
     // calc actual distance for candidates returned by qalsh
     for (int i = 0; i < verif_cnt; ++i) {
         int   idx  = cand_list[i];
-        float dist = fabs(calc_inner_product2<DType>(dim_, 
+        float dist = fabs(calc_ip2<DType>(dim_, 
             &data_[(uint64_t) idx*dim_], query));
         list->insert(dist, idx + 1);
     }
@@ -517,7 +516,7 @@ float FH_Minus_wo_S<DType>::calc_transform_query_norm(// calc l2-norm-sqr of g(q
         tmp = SQR(query[i]);
         norm2 += tmp; norm4 += SQR(tmp);
     }
-    return 2*norm2*norm2 - norm4;
+    return 2 * norm2 * norm2 - norm4;
 }
 
 } // end namespace p2h

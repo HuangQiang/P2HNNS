@@ -50,7 +50,7 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += sizeof(float)*fh_dim_; // centroid_
-        ret += sizeof(int)*n_pts_;    // shift_id_
+        ret += sizeof(int)*n_;        // shift_id_
         for (auto hash : hash_) {     // blocks_
             ret += hash->get_memory_usage();
         }
@@ -58,7 +58,7 @@ public:
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
     int   sample_dim_;              // sample dimension
     int   fh_dim_;                  // new data dimension after transformation
@@ -100,12 +100,11 @@ FH<DType>::FH(                      // constructor
     int   s,                            // scale factor of dimension
     float b,                            // interval ratio
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), sample_dim_(d*s), fh_dim_(d*(d+1)/2+1), data_(data)
+    : n_(n), dim_(d), sample_dim_(d*s), fh_dim_(d*(d+1)/2+1), data_(data)
 {
     // -------------------------------------------------------------------------
     //  calc centroid, l2-norm, and max l2-norm
     // -------------------------------------------------------------------------
-    int    fh_dim_1     = fh_dim_ - 1;
     float  *norm        = new float[n];       // l2-norm of sample_data
     float  *centroid    = new float[fh_dim_]; // centroid of sample_data
     int    *sample_d    = new int[n];         // number of sample dimensions
@@ -122,7 +121,7 @@ FH<DType>::FH(                      // constructor
 
     // calc centroid and its l2-norm-sqr
     float norm_sqr_ctrd = 0.0f;
-    for (int i = 0; i < fh_dim_1; ++i) {
+    for (int i = 0; i < fh_dim_-1; ++i) {
         centroid[i] /= n;
         norm_sqr_ctrd += SQR(centroid[i]);
     }
@@ -132,7 +131,7 @@ FH<DType>::FH(                      // constructor
         last += norm[i];
     }
     last /= n;
-    centroid[fh_dim_1] = last;
+    centroid[fh_dim_-1] = last;
     norm_sqr_ctrd += SQR(last);
 
     // -------------------------------------------------------------------------
@@ -165,28 +164,24 @@ FH<DType>::FH(                      // constructor
         // add block
         const int *index = (const int*) shift_id_ + start;
         RQALSH *hash = new RQALSH(cnt, fh_dim_, m, index);
-
         for (int i = 0; i < cnt; ++i) {
             // calc the hash values of P*f(o)
             int idx = index[i];
             for (int j = 0; j < m; ++j) {
-                hash->tables_[j*cnt+i].id_  = i;
-                hash->tables_[j*cnt+i].key_ = hash->calc_hash_value(sample_d[idx],
-                    j, norm[idx], &sample_data[idx*sample_dim_]);
+                float val = hash->calc_hash_value( sample_d[idx], j, norm[idx], 
+                    &sample_data[(uint64_t)idx*sample_dim_]);
+                hash->tables_[(uint64_t)j*cnt+i].id_  = i;
+                hash->tables_[(uint64_t)j*cnt+i].key_ = val;
             }
         }
         // sort hash tables in ascending order of hash values
         for (int i = 0; i < m; ++i) {
-            qsort(&hash->tables_[i*cnt], cnt, sizeof(Result), ResultComp);
+            qsort(&hash->tables_[(uint64_t)i*cnt], cnt, sizeof(Result), ResultComp);
         }
         hash_.push_back(hash);
         start += cnt;
     }
     assert(start == n);
-
-    // -------------------------------------------------------------------------
-    //  release space
-    // -------------------------------------------------------------------------
     delete[] arr;
     delete[] sample_data;
     delete[] sample_d;
@@ -203,7 +198,7 @@ void FH<DType>::transform_data(     // data transformation
     Result *sample_data,                // sample data (return)
     float  *centroid)                   // centroid (return)
 {
-    // 1: calc probability vector
+    // 1: calc probability vector and the l2-norm-square of data
     float *prob = new float[dim_]; // probability vector
     init_prob_vector<DType>(dim_, data, prob);
 
@@ -221,7 +216,7 @@ void FH<DType>::transform_data(     // data transformation
     sample_data[sample_d].key_ = key;
     centroid[sid] += key; norm += SQR(key); ++sample_d;
 
-    // 2.2: consider the combination of the remaining coordinates
+    // 2.2: consider the combination of the remain coordinates
     for (int i = 1; i < sample_dim_; ++i) {
         int idx = coord_sampling(dim_-1, prob); // lower  dim
         int idy = coord_sampling(dim_, prob);   // higher dim
@@ -289,7 +284,6 @@ FH<DType>::~FH()                    // destructor
     delete[] shift_id_;
     if (!hash_.empty()) {
         for (auto& hash : hash_) delete hash;
-
         std::vector<RQALSH*>().swap(hash_);
     }
 }
@@ -299,7 +293,7 @@ template<class DType>
 void FH<DType>::display()           // display parameters
 {
     printf("Parameters of FH:\n");
-    printf("n          = %d\n", n_pts_);
+    printf("n          = %d\n", n_);
     printf("dim        = %d\n", dim_);
     printf("sample_dim = %d\n", sample_dim_);
     printf("fh_dim     = %d\n", fh_dim_);
@@ -337,8 +331,7 @@ int FH<DType>::nns(                 // point-to-hyperplane NNS
         size = hash->fns(l, n_cand, kfn_dist, sample_d, sample_query, cand_list);
         for (int j = 0; j < size; ++j) {
             idx  = cand_list[j];
-            dist = fabs(calc_inner_product2<DType>(dim_, 
-                &data_[(uint64_t) idx*dim_], query));
+            dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
             list->insert(dist, idx + 1);
         }
         // update info
@@ -355,7 +348,7 @@ template<class DType>
 void FH<DType>::transform_query(    // query transformation
     const  float *query,                // input query
     int    &sample_d,                   // dimension of sample query (return)
-    Result *sample_query)               // sample query after transform (return)
+    Result *sample_q)                   // sample query after transform (return)
 {
     // 1: calc probability vector
     float *prob = new float[dim_];
@@ -380,8 +373,8 @@ void FH<DType>::transform_query(    // query transformation
             // calc the square coordinates
             checked[sid] = true;
             key = query[idx] * query[idx];
-            sample_query[sample_d].id_  = sid;
-            sample_query[sample_d].key_ = key;
+            sample_q[sample_d].id_  = sid;
+            sample_q[sample_d].key_ = key;
             norm_sample_q += SQR(key); ++sample_d;
         }
         else {
@@ -391,14 +384,14 @@ void FH<DType>::transform_query(    // query transformation
             // calc the differential coordinates
             checked[sid] = true;
             key = 2 * query[idx] * query[idy];
-            sample_query[sample_d].id_  = sid;
-            sample_query[sample_d].key_ = key;
+            sample_q[sample_d].id_  = sid;
+            sample_q[sample_d].key_ = key;
             norm_sample_q += SQR(key); ++sample_d;
         }
     }
     // multiply lambda
     float lambda = sqrt(M_ / norm_sample_q);
-    for (int i = 0; i < sample_d; ++i) sample_query[i].key_ *= lambda;
+    for (int i = 0; i < sample_d; ++i) sample_q[i].key_ *= lambda;
 
     delete[] prob;
     delete[] checked;
@@ -441,7 +434,7 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += sizeof(float)*fh_dim_; // centroid_
-        ret += sizeof(int)*n_pts_;    // shift_id_
+        ret += sizeof(int)*n_;        // shift_id_
         for (auto hash : hash_) {     // blocks_
             ret += hash->get_memory_usage();
         }
@@ -449,7 +442,7 @@ public:
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
     int   fh_dim_;                  // new data dimension after transformation
     float M_;                       // max l2-norm sqr of o'
@@ -498,7 +491,7 @@ FH_wo_S<DType>::FH_wo_S(            // constructor
     int   m,                            // number of hash tables
     float b,                            // interval ratio
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), fh_dim_(d*(d+1)/2+1), data_(data)
+    : n_(n), dim_(d), fh_dim_(d*(d+1)/2+1), data_(data)
 {
     int   fh_dim_1  = fh_dim_ - 1;
     float *norm     = new float[n];        // l2-norm  of f(o)
@@ -546,29 +539,24 @@ FH_wo_S<DType>::FH_wo_S(            // constructor
         // add block
         const int *index = (const int*) shift_id_ + start;
         RQALSH *hash = new RQALSH(cnt, fh_dim_, m, index);
-
         for (int i = 0; i < cnt; ++i) {
             // calc hash values
-            int   idx = index[i];
-            float val = -1.0f;
+            int idx = index[i];
             transform_data(norm[idx], &data[(uint64_t)idx*d], fh_data);
             for (int j = 0; j < m; ++j) {
-                val = hash->calc_hash_value(fh_dim_, j, fh_data);
-                
-                hash->tables_[j*cnt+i].id_  = i;
-                hash->tables_[j*cnt+i].key_ = val;
+                float val = hash->calc_hash_value(fh_dim_, j, fh_data);
+                hash->tables_[(uint64_t)j*cnt+i].id_  = i;
+                hash->tables_[(uint64_t)j*cnt+i].key_ = val;
             }
         }
         // sort hash tables in ascending order of hash values
         for (int i = 0; i < m; ++i) {
-            qsort(&hash->tables_[i*cnt], cnt, sizeof(Result), ResultComp);
+            qsort(&hash->tables_[(uint64_t)i*cnt], cnt, sizeof(Result), ResultComp);
         }
         hash_.push_back(hash);
         start += cnt;
     }
     assert(start == n);
-
-    // release space
     delete[] fh_data;
     delete[] norm;
     delete[] centroid;
@@ -607,7 +595,6 @@ float FH_wo_S<DType>::calc_transform_data_norm(// calc l2-norm-sqr of f(o)
     float tmp, norm2 = 0.0f, norm4 = 0.0f;
     for (int i = 0; i < dim_; ++i) {
         tmp = (float) SQR(data[i]);
-
         norm2 += tmp; norm4 += SQR(tmp);
     }
     return (norm2 * norm2 + norm4) / 2.0f;
@@ -680,7 +667,7 @@ template<class DType>
 void FH_wo_S<DType>::display()      // display parameters
 {
     printf("Parameters of FH_wo_S:\n");
-    printf("n        = %d\n", n_pts_);
+    printf("n        = %d\n", n_);
     printf("dim      = %d\n", dim_);
     printf("fh_dim   = %d\n", fh_dim_);
     printf("max_norm = %f\n", sqrt(M_));
@@ -714,11 +701,9 @@ int FH_wo_S<DType>::nns(            // point-to-hyperplane NNS
             kfn_dist = sqrt(fix_val - 2*kdist*kdist);
         }
         size = hash->fns(l, n_cand, kfn_dist, fh_query, cand_list);
-        
         for (int j = 0; j < size; ++j) {
             idx  = cand_list[j];
-            dist = fabs(calc_inner_product2<DType>(dim_, &data_[(uint64_t)idx*dim_],
-                query));
+            dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
             list->insert(dist, idx + 1);
         }
         // update info

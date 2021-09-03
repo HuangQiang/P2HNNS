@@ -14,6 +14,13 @@ namespace p2h {
 #define DIFF(x, y)                  ((y) - (x))
 #define SWAP(x, y)                  {int tmp=x; x=y; y=tmp;}
 
+#define HEAD(method_name)           { \
+    printf("%s for Point-to-Hyperplane NNS:\n", method_name); \
+    printf("Top-k\t\tRatio\t\tTime (ms)\tRecall (%%)\tPrecision (%%)\t" \
+        "Fraction (%%)\n"); \
+}
+#define FOOT(fp)                    {printf("\n");fprintf(fp,"\n");fclose(fp);}
+
 // -----------------------------------------------------------------------------
 //  General Constants
 // -----------------------------------------------------------------------------

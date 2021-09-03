@@ -43,6 +43,7 @@ struct CountMarkerU {
 };
 using CountMarker = CountMarkerU<unsigned>;
 
+
 // -----------------------------------------------------------------------------
 template<class SigType=int64_t>
 class KLBucketingFlat {
@@ -107,6 +108,7 @@ public:
         return ret;
     }
 };
+
 
 // -----------------------------------------------------------------------------
 //  Basic_Hash: Basic data structure for EH, BH, and MH (Abstrcut Class)

@@ -53,20 +53,25 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += buckets_.get_memory_usage();
-        ret += sizeof(float)*projv_.capacity(); // projv
+        ret += sizeof(float)*(uint64_t)m_*l_*M_*dim_; // projv
         return ret;
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
     int   M_;                       // #proj vecotr used for a single hasher
     int   m_;                       // #single hasher of the compond hasher
     int   l_;                       // #hash tables
     const int *index_;              // index of input data
 
-    std::vector<float> projv_;      // random projection vectors
+    float *projv_;                  // random projection vectors
     KLBucketingFlat<SigType> buckets_; // hash tables
+
+    // -------------------------------------------------------------------------
+    float calc_hash_value(          // calc hash value
+        const float *data,              // input data
+        const float *proj) const;       // random projection vector
 };
 
 // -----------------------------------------------------------------------------
@@ -79,12 +84,12 @@ MH_Hash<DType>::MH_Hash(            // constructor
     int   l,                            // #hash tables
     const int   *index,                 // index of input data
     const float *data)                  // input data
-    : n_pts_(n), dim_(d), M_(M), m_(m), l_(l), index_(index), buckets_(n, l)
+    : n_(n), dim_(d), M_(M), m_(m), l_(l), index_(index), buckets_(n, l)
 {
     // sample random projection variables
     uint64_t size = (uint64_t) m * l * M * d;
-    projv_.resize(size);
-    for (uint64_t i = 0; i < size; ++i) {
+    projv_ = new float[size];
+    for (size_t i = 0; i < size; ++i) {
         projv_[i] = gaussian(0.0f, 1.0f);
     }
 
@@ -103,30 +108,41 @@ void MH_Hash<DType>::get_sig_data(  // get signature of data
     std::vector<SigType> &sig) const    // signature (return)
 {
     // the dimension of sig is l_
-    uint64_t pidx = 0;
-    for (int ll = 0; ll < l_; ++ll) {
+    for (int i = 0; i < l_; ++i) {
         SigType cur_sig = 0;
-        for (int mm = 0; mm < m_; ++mm) {
-            float product = 1.0f;
-            for (int nproj = 0; nproj < M_; ++nproj) {
-                float projection = 0.0f;
-                for (int i = 0; i < dim_; ++i) {
-                    pidx = ((uint64_t) ll*m_+mm)*M_*dim_ + nproj*dim_ + i;
-                    projection += data[i]*projv_[pidx];
-                }
-                product *= projection;
-            }
-            SigType new_sig = (product > 0);
+        for (int j = 0; j < m_; ++j) {
+            const float *proj = &projv_[((uint64_t) i*m_+j)*M_*dim_];
+            float val = calc_hash_value(data, proj);
+
+            SigType new_sig = (val > 0);
             cur_sig = (cur_sig<<1) | new_sig;
         }
-        sig[ll] = cur_sig;
+        sig[i] = cur_sig;
     }
+}
+
+// -----------------------------------------------------------------------------
+template<class DType>
+float MH_Hash<DType>::calc_hash_value(// calc hash value
+    const float *data,                  // input data
+    const float *proj) const            // random projection vector
+{
+    float product = 1.0f;
+    for (int i = 0; i < M_; ++i) {
+        const float *vec = &proj[i*dim_];
+        float val = 0.0f;
+        for (int j = 0; j < dim_; ++j) val += data[j] * vec[j];
+        
+        product *= val;
+    }
+    return product;
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
 MH_Hash<DType>::~MH_Hash()          // destructor
 {
+    delete[] projv_;
 }
 
 // -----------------------------------------------------------------------------
@@ -145,8 +161,7 @@ int MH_Hash<DType>::nns(            // point-to-hyperplane NNS
     buckets_.for_cand(cand, sigs, [&](int idx) {
         // verify the true distance of idx
         did  = index_[idx];
-        dist = fabs(calc_inner_product2<DType>(dim_, &data[(uint64_t)did*dim_],
-            query));
+        dist = fabs(calc_ip2<DType>(dim_, &data[(uint64_t)did*dim_], query));
         list->insert(dist, did + 1);
         ++verif_cnt;
     });
@@ -160,23 +175,16 @@ void MH_Hash<DType>::get_sig_query( // get signature of query
     std::vector<SigType> &sig) const    // signature (return)
 {
     // the dimension of sig is l_
-    uint64_t pidx = 0;
-    for (int ll = 0; ll < l_; ++ll) {
+    for (int i = 0; i < l_; ++i) {
         SigType cur_sig = 0;
-        for (int mm = 0; mm < m_; ++mm) {
-            float product = 1.0f;
-            for (int nproj = 0; nproj < M_; ++nproj) {
-                float projection = 0.0f;
-                for (int i = 0; i < dim_; ++i) {
-                    pidx = ((uint64_t) ll*m_+mm)*M_*dim_ + nproj*dim_ + i;
-                    projection += query[i] * projv_[pidx];
-                }
-                product *= projection;
-            }
-            SigType new_sig = !(product > 0);
+        for (int j = 0; j < m_; ++j) {
+            const float *proj = &projv_[((uint64_t) i*m_+j)*M_*dim_];
+            float val = calc_hash_value(query, proj);
+
+            SigType new_sig = !(val > 0);
             cur_sig = (cur_sig<<1) | new_sig;
         }
-        sig[ll] = cur_sig;
+        sig[i] = cur_sig;
     }
 }
 
@@ -216,25 +224,31 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += buckets_.get_memory_usage(); // buckets_
-        ret += sizeof(float)*projv_.capacity(); // projv
+        ret += sizeof(float)*(uint64_t)m_*l_*M_*dim_; // projv
         return ret;
     }
 
 protected:
-    int   n_pts_;                   // number of data objects
+    int   n_;                   // number of data objects
     int   dim_;                     // dimension of data objects
     int   M_;                       // #proj vector used for a single hasher
     int   m_;                       // #single hasher of the compond hasher
     int   l_;                       // #hash tables
     const DType *data_;             // data objects
 
-    std::vector<float> projv_;      // random projection vectors
+    float *projv_;                  // random projection vectors
     KLBucketingFlat<SigType> buckets_; // hash tables
 
     // -------------------------------------------------------------------------
     void get_sig_data(              // get the signature of data
         const DType *data,              // input data
         std::vector<SigType> &sig) const;// signature (return)
+
+    // -------------------------------------------------------------------------
+    template<class HType>
+    float calc_hash_value(          // calc hash value
+        const HType *data,              // input data
+        const float *proj) const;       // random projection vector
 
     // -------------------------------------------------------------------------
     void get_sig_query(             // get the signature of query
@@ -251,12 +265,12 @@ Orig_MH<DType>::Orig_MH(            // constructor
     int   m,                            // #single hasher of the compond hasher
     int   l,                            // #hash tables
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), M_(M), m_(m), l_(l), data_(data), buckets_(n, l)
+    : n_(n), dim_(d), M_(M), m_(m), l_(l), data_(data), buckets_(n, l)
 {
     // sample random projection variables
-    int size = m * l * M * d;
-    projv_.resize(size);
-    for (int i = 0; i < size; ++i) {
+    uint64_t size = (uint64_t) m * l * M * d;
+    projv_ = new float[size];
+    for (size_t i = 0; i < size; ++i) {
         projv_[i] = gaussian(0.0f, 1.0f);
     }
 
@@ -275,29 +289,42 @@ void Orig_MH<DType>::get_sig_data(  // get signature of data
     std::vector<SigType> &sig) const    // signature (return)
 {
     // the dimension of sig is l
-    for (int ll = 0; ll < l_; ++ll) {
+    for (int i = 0; i < l_; ++i) {
         SigType cur_sig = 0;
-        for (int mm = 0; mm < m_; ++mm) {
-            float product = 1.0f;
-            for (int nproj = 0; nproj < M_; ++nproj) {
-                float projection = 0.0f;
-                for (int i = 0; i < dim_; ++i) {
-                    int pidx = (ll*m_+mm)*dim_*M_ + nproj*dim_ + i;
-                    projection += data[i] * projv_[pidx];
-                }
-                product *= projection;
-            }
-            SigType new_sig = (product > 0);
+        for (int j = 0; j < m_; ++j) {
+            const float *proj = &projv_[((uint64_t) i*m_+j)*M_*dim_];
+            float val = calc_hash_value<DType>(data, proj);
+
+            SigType new_sig = (val > 0);
             cur_sig = (cur_sig<<1) | new_sig;
         }
-        sig[ll] = cur_sig;
+        sig[i] = cur_sig;
     }
+}
+
+// -----------------------------------------------------------------------------
+template<class DType>
+template<class HType>
+float Orig_MH<DType>::calc_hash_value(// calc hash value
+    const HType *data,                  // input data
+    const float *proj) const            // random projection vector
+{
+    float product = 1.0f;
+    for (int i = 0; i < M_; ++i) {
+        const float *vec = &proj[i*dim_];
+        float val = 0.0f;
+        for (int j = 0; j < dim_; ++j) val += data[j] * vec[j];
+        
+        product *= val;
+    }
+    return product;
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
 Orig_MH<DType>::~Orig_MH()          // destructor
 {
+    delete[] projv_;
 }
 
 // -----------------------------------------------------------------------------
@@ -305,7 +332,7 @@ template<class DType>
 void Orig_MH<DType>::display()      // display parameters
 {
     printf("Parameters of Orig_MH:\n");
-    printf("n   = %d\n", n_pts_);
+    printf("n   = %d\n", n_);
     printf("dim = %d\n", dim_);
     printf("M   = %d\n", M_);
     printf("m   = %d\n", m_);
@@ -324,12 +351,12 @@ int Orig_MH<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(l_);
     get_sig_query(query, sigs);
 
-    int verif_cnt = 0;
+    int   verif_cnt = 0;
+    float dist = -1.0f;
     buckets_.for_cand(cand, sigs, [&](int idx){
         // verify the true distance of idx
-        float dist = fabs(calc_inner_product2<DType>(dim_, 
-            &data_[(uint64_t) idx*dim_], query));
-        list->insert(dist, idx + 1);
+        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t) idx*dim_], query));
+        list->insert(dist, idx+1);
         ++verif_cnt;
     });
     return verif_cnt;
@@ -342,22 +369,16 @@ void Orig_MH<DType>::get_sig_query( // get signature of query
     std::vector<SigType> &sig) const    // signature (return)
 {
     // the dimension of ret is l
-    for (int ll = 0; ll < l_; ++ll) {
+    for (int i = 0; i < l_; ++i) {
         SigType cur_sig = 0;
-        for (int mm = 0; mm < m_; ++mm) {
-            float product = 1.0f;
-            for (int nproj = 0; nproj < M_; ++nproj) {
-                float projection = 0.0f;
-                for (int i = 0; i < dim_; ++i) {
-                    int pidx = (ll*m_+mm)*dim_*M_ + nproj*dim_ + i;
-                    projection += query[i] * projv_[pidx];
-                }
-                product *= projection;
-            }
-            SigType new_sig = !(product > 0);
+        for (int j = 0; j < m_; ++j) {
+            const float *proj = &projv_[((uint64_t) i*m_+j)*M_*dim_];
+            float val = calc_hash_value<float>(query, proj);
+
+            SigType new_sig = !(val > 0);
             cur_sig = (cur_sig<<1) | new_sig;
         }
-        sig[ll] = cur_sig;
+        sig[i] = cur_sig;
     }
 }
 

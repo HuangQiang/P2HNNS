@@ -38,7 +38,6 @@ int read_ground_truth(              // read ground truth results from disk
     const char *fname,                  // address of truth set
     Result *R)                          // ground truth results (return)
 {
-    gettimeofday(&g_start_time, NULL);
     FILE *fp = fopen(fname, "r");
     if (!fp) { printf("Could not open %s\n", fname); return 1; }
 
@@ -53,11 +52,6 @@ int read_ground_truth(              // read ground truth results from disk
         fscanf(fp, "\n");
     }
     fclose(fp);
-    gettimeofday(&g_end_time, NULL);
-
-    float running_time = g_end_time.tv_sec - g_start_time.tv_sec + 
-        (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-    printf("Read Truth: %f Seconds\n\n", running_time);
 
     return 0;
 }
@@ -235,20 +229,6 @@ float calc_ratio(                   // calc overall ratio
 }
 
 // -----------------------------------------------------------------------------
-float calc_recall(                  // calc recall (percentage)
-    int   k,                            // top-k value
-    const Result *R,                    // ground truth results 
-    MinK_List *list)                    // results returned by algorithms
-{
-    int i = list->size() - 1;
-    int last = k - 1;
-    while (i >= 0 && list->ith_key(i) - R[last].key_ > CHECK_ERROR) {
-        i--;
-    }
-    return (i + 1) * 100.0f / k;
-}
-
-// -----------------------------------------------------------------------------
 void calc_pre_recall(               // calc precision and recall (percentage)
     int   top_k,                        // top-k value
     int   check_k,                      // number of checked objects
@@ -264,6 +244,93 @@ void calc_pre_recall(               // calc precision and recall (percentage)
     }
     recall    = (i+1)*100.0f / top_k;
     precision = (i+1)*100.0f / check_k;
+}
+
+// -----------------------------------------------------------------------------
+void write_index_info(              // display & write index overhead info
+    float memory,                       // memory cost
+    FILE  *fp)                          // file pointer (return)
+{
+    float indexing_time = g_end_time.tv_sec - g_start_time.tv_sec + 
+        (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
+
+    printf("Indexing Time:    %f Seconds\n", indexing_time);
+    printf("Estimated Memory: %f MB\n\n", memory);
+
+    fprintf(fp, "Indexing Time: %f Seconds\n", indexing_time);
+    fprintf(fp, "Estimated Memory: %f MB\n", memory);
+    fclose(fp);
+}
+
+// -----------------------------------------------------------------------------
+void write_params(                  // open file and write parameters
+    int   l,                            // collision (or separation) threshold 
+    int   cand,                         // number of candidates
+    const char *fname,                  // file name
+    FILE  *fp)                          // file pointer (return)
+{
+    fp = fopen(fname, "a+");
+    fprintf(fp, "l=%d, cand=%d\n", l, cand);
+    printf("l=%d, cand=%d\n", l, cand);
+}
+
+// -----------------------------------------------------------------------------
+void write_params(                  // open file and write parameters
+    int   cand,                         // number of candidates
+    const char *fname,                  // file name
+    FILE  *fp)                          // file pointer (return)
+{
+    fp = fopen(fname, "a+");
+    fprintf(fp, "cand=%d\n", cand);
+    printf("cand=%d\n", cand);
+}
+
+// -----------------------------------------------------------------------------
+void init_global_metric()           // init the global metric
+{
+    g_ratio     = 0.0f;
+    g_recall    = 0.0f;
+    g_precision = 0.0f;
+    g_fraction  = 0.0f;
+}
+
+// -----------------------------------------------------------------------------
+void update_global_metric(          // init the global metric
+    int   top_k,                        // top-k value
+    int   check_k,                      // number of checked objects
+    int   n,                            // number of data points
+    const Result *R,                    // ground truth results 
+    MinK_List *list)                    // results returned by algorithms
+{
+    float recall = 0.0f;
+    float precision = 0.0f;
+    calc_pre_recall(top_k, check_k, R, list, recall, precision);
+
+    g_recall    += recall;
+    g_precision += precision;
+    g_fraction  += check_k * 100.0f / n;
+    g_ratio     += calc_ratio(top_k, R, list);
+}
+
+// -----------------------------------------------------------------------------
+void calc_and_write_global_metric(  // init the global metric
+    int  top_k,                         // top-k value
+    int  qn,                            // number of queries
+    FILE *fp)                           // file pointer
+{
+    g_runtime = g_end_time.tv_sec - g_start_time.tv_sec + (g_end_time.tv_usec -
+        g_start_time.tv_usec) / 1000000.0f;
+
+    g_ratio     = g_ratio     / qn;
+    g_recall    = g_recall    / qn;
+    g_precision = g_precision / qn;
+    g_fraction  = g_fraction  / qn;
+    g_runtime   = g_runtime * 1000.0f / qn;
+
+    printf("%3d\t\t%.4f\t\t%.4f\t\t%.3f\t\t%.3f\t\t%.3f\n", top_k, 
+        g_ratio, g_runtime, g_recall, g_precision, g_fraction);
+    fprintf(fp, "%d\t%f\t%f\t%f\t%f\t%f\n", top_k, g_ratio, g_runtime, 
+        g_recall, g_precision, g_fraction);
 }
 
 } // end namespace p2hnns

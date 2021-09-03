@@ -24,9 +24,6 @@ namespace p2h {
 extern timeval g_start_time;        // global param: start time
 extern timeval g_end_time;          // global param: end time
 
-extern float g_memory;              // global param: memory usage (megabytes)
-extern float g_indextime;           // global param: indexing time (seconds)
-
 extern float g_runtime;             // global param: running time (ms)
 extern float g_ratio;               // global param: overall ratio
 extern float g_recall;              // global param: recall (%)
@@ -96,12 +93,6 @@ float calc_ratio(                   // calc overall ratio
     int   k,                            // top-k value
     const Result *R,                    // ground truth results 
     MinK_List *list);                   // results returned by algorithms
-    
-// -----------------------------------------------------------------------------
-float calc_recall(                  // calc recall (percentage)
-    int   k,                            // top-k value
-    const Result *R,                    // ground truth results 
-    MinK_List *list);                   // results returned by algorithms
 
 // -----------------------------------------------------------------------------
 void calc_pre_recall(               // calc precision and recall (percentage)
@@ -113,59 +104,59 @@ void calc_pre_recall(               // calc precision and recall (percentage)
     float &precision);                  // precision value (return)
 
 // -----------------------------------------------------------------------------
-template<class DType>
-int read_bin_data(                  // read data set (binary) from disk
+void write_index_info(              // display & write index overhead info
+    float memory,                       // memory cost
+    FILE  *fp);                         // file pointer (return)
+
+// -----------------------------------------------------------------------------
+void write_params(                  // open file and write parameters
+    int   l,                            // collision (or separation) threshold 
+    int   cand,                         // number of candidates
+    const char *fname,                  // file name
+    FILE  *fp);                         // file pointer (return)
+
+// -----------------------------------------------------------------------------
+void write_params(                  // open file and write parameters
+    int   cand,                         // number of candidates
+    const char *fname,                  // file name
+    FILE  *fp);                         // file pointer (return)
+
+// -----------------------------------------------------------------------------
+void init_global_metric();          // init the global metric
+
+// -----------------------------------------------------------------------------
+void update_global_metric(          // init the global metric
+    int   top_k,                        // top-k value
+    int   check_k,                      // number of checked objects
     int   n,                            // number of data points
+    const Result *R,                    // ground truth results 
+    MinK_List *list);                   // results returned by algorithms
+
+// -----------------------------------------------------------------------------
+void calc_and_write_global_metric(  // init the global metric
+    int  top_k,                         // top-k value
+    int  qn,                            // number of queries
+    FILE *fp);                          // file pointer
+
+// -----------------------------------------------------------------------------
+template<class DType>
+int read_bin_data(                  // read binary data/query set from disk
+    int   n,                            // number of data/query points
     int   d,                            // dimensionality
-    const char *fname,                  // address of data set
-    DType *data)                        // data (return)
+    const char *fname,                  // address of data/query set
+    DType *data)                        // data/query (return)
 {
-    gettimeofday(&g_start_time, NULL);
     FILE *fp = fopen(fname, "rb");
     if (!fp) { printf("Could not open %s\n", fname); return 1; }
     
     fread(data, sizeof(DType), (uint64_t) n*d, fp);
-    // TODO need to modify the format of data sets
-    // for (int i = 0; i < (uint64_t) n*d; i += d) {
-    //     fread(&data[i], sizeof(DType), d-1, fp);
-    //     data[i+d-1] = 1.0f;
-    // }
     fclose(fp);
-    gettimeofday(&g_end_time, NULL);
-
-    float running_time = g_end_time.tv_sec - g_start_time.tv_sec + 
-        (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-    printf("Read Data:  %f Seconds\n", running_time);
-
     return 0;
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
-int read_bin_query(                 // read query set (binary) from disk
-    int   qn,                           // number of queries
-    int   d,                            // dimensionality
-    const char *fname,                  // address of query set
-    DType *query)                       // query (return)
-{
-    gettimeofday(&g_start_time, NULL);
-    FILE *fp = fopen(fname, "rb");
-    if (!fp) { printf("Could not open %s\n", fname); return 1; }
-
-    fread(query, sizeof(DType), (uint64_t) qn*d, fp);
-    fclose(fp);
-    gettimeofday(&g_end_time, NULL);
-
-    float running_time = g_end_time.tv_sec - g_start_time.tv_sec + 
-        (g_end_time.tv_usec - g_start_time.tv_usec) / 1000000.0f;
-    printf("Read Query: %f Seconds\n", running_time);
-
-    return 0;
-}
-
-// -----------------------------------------------------------------------------
-template<class DType>
-float calc_inner_product(           // calc inner product
+float calc_ip(                      // calc inner product
     int   dim,                          // dimension
     const DType *p1,                    // 1st point
     const DType *p2)                    // 2nd point
@@ -177,7 +168,7 @@ float calc_inner_product(           // calc inner product
 
 // -----------------------------------------------------------------------------
 template<class DType>
-float calc_inner_product2(          // calc inner product
+float calc_ip2(                     // calc inner product
     int   dim,                          // dimension
     const DType *p1,                    // 1st point
     const float *p2)                    // 2nd point
@@ -194,9 +185,9 @@ float calc_cosine_angle(            // calc cosine angle, [-1,1]
     const DType *p1,                    // 1st point
     const float *p2)                    // 2nd point
 {
-    float ip    = calc_inner_product2<DType>(dim, p1, p2);
-    float norm1 = sqrt(calc_inner_product<DType>(dim, p1, p1));
-    float norm2 = sqrt(calc_inner_product<float>(dim, p2, p2));
+    float ip    = calc_ip2<DType>(dim, p1, p2);
+    float norm1 = sqrt(calc_ip<DType>(dim, p1, p1));
+    float norm2 = sqrt(calc_ip<float>(dim, p2, p2));
 
     return ip / (norm1 * norm2);
 }
@@ -208,7 +199,7 @@ void get_normalized_query(          // get normalized query
     const DType *query,                 // input query
     float *norm_q)                      // normalized query (return)
 {
-    float norm = sqrt(calc_inner_product<DType>(d-1, query, query));
+    float norm = sqrt(calc_ip<DType>(d-1, query, query));
     for (int i = 0; i < d; ++i) norm_q[i] = query[i] / norm;
 }
 
@@ -228,7 +219,7 @@ void norm_distribution(             // histogram of l2-norm of data
     float min_norm  = MAXREAL;
     float mean_norm = 0.0f;
     for (int i = 0; i < n; ++i) {
-        norm[i] = sqrt(calc_inner_product<DType>(d-1, &data[i*d], &data[i*d]));
+        norm[i] = sqrt(calc_ip<DType>(d-1, &data[i*d], &data[i*d]));
         
         mean_norm += norm[i];
         if (norm[i] > max_norm) max_norm = norm[i];
@@ -382,7 +373,7 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
     
     for (int i = 0; i < n; ++i) {
         // calc mean, min, max of l2-norm
-        norm[i] = sqrt(calc_inner_product<DType>(d-1, &data[i*d], &data[i*d]));
+        norm[i] = sqrt(calc_ip<DType>(d-1, &data[i*d], &data[i*d]));
         
         mean_norm += norm[i];
         if (norm[i] > max_norm) max_norm = norm[i];
@@ -482,7 +473,7 @@ int ground_truth(                   // find ground truth results
         list->reset();
         get_normalized_query<DType>(d, &query[i*d], norm_q);
         for (int j = 0; j < n; ++j) {
-            float dp = fabs(calc_inner_product2<DType>(d, &data[j*d], norm_q));
+            float dp = fabs(calc_ip2<DType>(d, &data[j*d], norm_q));
             list->insert(dp, j + 1);
         }
         // write groound truth results for each query

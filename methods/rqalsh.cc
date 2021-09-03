@@ -15,7 +15,7 @@ RQALSH::RQALSH(                     // constructor
     for (int i = 0; i < m*d; ++i) a_[i] = gaussian(0.0f, 1.0f);
     
     // allocate space for tables
-    tables_ = new Result[m*n];
+    tables_ = new Result[(uint64_t) m*n];
 }
 
 // -----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ float RQALSH::calc_hash_value(      // calc hash value
     const float *data)                  // input data
 {
     const float *a = &a_[tid*dim_];
-    return calc_inner_product2<float>(d, data, a);
+    return calc_ip<float>(d, data, a);
 }
 
 // -----------------------------------------------------------------------------
@@ -42,11 +42,9 @@ float RQALSH::calc_hash_value(      // calc hash value
     const Result *data)                 // input data
 {
     const float *a = &a_[tid*dim_];
-
-    int   idx = -1;
     float val = 0.0f;
     for (int i = 0; i < d; ++i) {
-        idx = data[i].id_;
+        int idx = data[i].id_;
         val += a[idx] * data[i].key_;
     }
     return val;
@@ -60,11 +58,9 @@ float RQALSH::calc_hash_value(      // calc hash value
     const Result *data)                 // input data
 {
     const float *a = &a_[tid*dim_];
-
-    int   idx = -1;
     float val = 0.0f;
     for (int i = 0; i < d; ++i) {
-        idx = data[i].id_;
+        int idx = data[i].id_;
         val += a[idx] * data[i].key_;
     }
     return val + a[dim_-1] * last;
@@ -72,7 +68,7 @@ float RQALSH::calc_hash_value(      // calc hash value
 
 // -----------------------------------------------------------------------------
 int RQALSH::fns(                    // furthest neighbor search
-    int   separation_threshold,         // separation threshold
+    int   l,                            // separation threshold
     int   cand,                         // #candidates
     float R,                            // limited search range
     const float *query,                 // query object
@@ -91,167 +87,17 @@ int RQALSH::fns(                    // furthest neighbor search
         return n_;
     }
 
-    // init parameters
-    int  *freq    = new int[n_];  memset(freq,    0,     n_*sizeof(int));
-    bool *checked = new bool[n_]; memset(checked, false, n_*sizeof(bool));
-    bool *b_flag  = new bool[m_]; memset(b_flag,  true,  m_*sizeof(bool));
-    bool *r_flag  = new bool[m_]; memset(r_flag,  true,  m_*sizeof(bool));
-
-    int   *l_pos  = new int[m_];
-    int   *r_pos  = new int[m_];
-    float *q_val  = new float[m_];
-
-    for (int i = 0; i < m_; ++i) {
-        q_val[i] = calc_hash_value(dim_, i, query);
-        l_pos[i] = 0;  
-        r_pos[i] = n_ - 1;
-    }
-
-    // -------------------------------------------------------------------------
-    //  furthest neighbor search
-    // -------------------------------------------------------------------------
-    int num_range = 0;              // number of search range flag
-    int cand_cnt  = 0;              // candidate counter    
-    
-    float w       = 1.0f;           // grid width
-    float radius  = find_radius(w, l_pos, r_pos, q_val); // search radius
-    float width   = radius * w / 2.0f; // bucket width
-    float range   = R < CHECK_ERROR ? 0.0f : R*w/2.0f; // search range
-
-    while (true) {
-        // ---------------------------------------------------------------------
-        //  step 1: initialization
-        // ---------------------------------------------------------------------
-        int num_bucket = 0; memset(b_flag, true, m_*sizeof(bool));
-
-        // ---------------------------------------------------------------------
-        //  step 2: (R,c)-FN search
-        // ---------------------------------------------------------------------
-        while (num_bucket < m_ && num_range < m_) {
-            for (int j = 0; j < m_; ++j) {
-                // CANNOT add !r_flag[j] as condition, because the
-                // r_flag[j] for large radius will affect small radius
-                if (!b_flag[j]) continue;
-
-                int    cnt = -1, lpos = -1, rpos = -1;
-                float  q_v = q_val[j], ldist = -1.0f, rdist = -1.0f;
-                Result *table = &tables_[j*n_];
-
-                // -------------------------------------------------------------
-                //  step 2.1: scan left part of bucket
-                // -------------------------------------------------------------
-                cnt  = 0;
-                lpos = l_pos[j]; rpos = r_pos[j];
-                while (cnt < SCAN_SIZE) {
-                    ldist = MINREAL;
-                    if (lpos < rpos) ldist = fabs(q_v - table[lpos].key_);
-                    else break;
-                    if (ldist < width || ldist < range) break;
-
-                    int id = table[lpos].id_;
-                    if (++freq[id] >= separation_threshold && !checked[id]) {
-                        checked[id] = true;
-                        if (index_) cand_list.push_back(index_[id]);
-                        else cand_list.push_back(id);
-                        if (++cand_cnt >= cand) break;
-                    }
-                    ++lpos; ++cnt;
-                }
-                if (cand_cnt >= cand) break;
-                l_pos[j] = lpos;
-
-                // -------------------------------------------------------------
-                //  step 2.2: scan right part of bucket
-                // -------------------------------------------------------------
-                cnt = 0;
-                while (cnt < SCAN_SIZE) {
-                    rdist = MINREAL;
-                    if (lpos < rpos) rdist = fabs(q_v - table[rpos].key_);
-                    else break;
-                    if (rdist < width || rdist < range) break;
-
-                    int id = table[rpos].id_;
-                    if (++freq[id] >= separation_threshold && !checked[id]) {
-                        checked[id] = true;
-                        if (index_) cand_list.push_back(index_[id]);
-                        else cand_list.push_back(id);
-                        if (++cand_cnt >= cand) break;
-                    }
-                    --rpos; ++cnt;
-                }
-                if (cand_cnt >= cand) break;
-                r_pos[j] = rpos;
-
-                // -------------------------------------------------------------
-                //  step 2.3: check whether this bucket is finished scanned
-                // -------------------------------------------------------------
-                if (lpos >= rpos || (ldist < width && rdist < width)) {
-                    if (b_flag[j]) { b_flag[j] = false; ++num_bucket; }
-                }
-                if (lpos >= rpos || (ldist < range && rdist < range)) {
-                    if (b_flag[j]) { b_flag[j] = false; ++num_bucket; }
-                    if (r_flag[j]) { r_flag[j] = false; ++num_range;  }
-                }
-                // use break after checking both b_flag and r_flag
-                if (num_bucket >= m_ || num_range >= m_) break;
-            }
-            if (num_bucket >= m_ || num_range >= m_) break;
-            if (cand_cnt >= cand) break;
-        }
-        // ---------------------------------------------------------------------
-        //  step 3: stop condition
-        // ---------------------------------------------------------------------
-        if (num_range >= m_ || cand_cnt >= cand) break;
-
-        // ---------------------------------------------------------------------
-        //  step 4: update radius
-        // ---------------------------------------------------------------------
-        radius = radius / 2.0f;
-        width  = radius * w / 2.0f;
-    }
-    // release space
-    delete[] freq;
-    delete[] l_pos;
-    delete[] r_pos;
-    delete[] checked;
-    delete[] b_flag;
-    delete[] r_flag;
-    delete[] q_val;
+    // dynamic separation counting
+    init(query);
+    int cand_cnt = dynamic_separation_counting(l, cand, R, cand_list);
+    free();
 
     return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
-float RQALSH::find_radius(          // find proper radius
-    float w,                            // grid width                        
-    const int *lpos,                    // left  position of query in hash table
-    const int *rpos,                    // right position of query in hash table
-    const float *q_v)                   // hash value of query
-{
-    // find projected distance closest to the query in each hash tables 
-    std::vector<float> list;
-    for (int i = 0; i < m_; ++i) {
-        if (lpos[i] < rpos[i]) {
-            list.push_back(fabs(tables_[i*n_+lpos[i]].key_ - q_v[i]));
-            list.push_back(fabs(tables_[i*n_+rpos[i]].key_ - q_v[i]));
-        }
-    }
-    // sort the array in ascending order 
-    std::sort(list.begin(), list.end());
-
-    // find the median distance and return the new radius
-    int   num  = (int) list.size();
-    float dist = -1.0f;
-    if (num % 2 == 0) dist = (list[num / 2 - 1] + list[num / 2]) / 2.0f;
-    else dist = list[num / 2];
-    
-    int kappa = (int) ceil(log(2.0f * dist / w) / log(2.0f));
-    return pow(2.0f, kappa);
-}
-
-// -----------------------------------------------------------------------------
 int RQALSH::fns(                    // furthest neighbor search
-    int   separation_threshold,         // separation threshold
+    int   l,                            // separation threshold
     int   cand,                         // #candidates
     float R,                            // limited search range
     int   sample_dim,                   // sample dimension
@@ -271,66 +117,99 @@ int RQALSH::fns(                    // furthest neighbor search
         return n_;
     }
 
-    // init parameters
-    int  *freq    = new int[n_]; memset(freq, 0, n_*sizeof(int));
-    bool *checked = new bool[n_]; memset(checked, false, n_*sizeof(bool));
-    bool *b_flag  = new bool[m_]; memset(b_flag, true, m_*sizeof(bool));
-    bool *r_flag  = new bool[m_]; memset(r_flag, true, m_*sizeof(bool));
+    // dynamic separation counting
+    init(sample_dim, query);
+    int cand_cnt = dynamic_separation_counting(l, cand, R, cand_list);
+    free();
 
-    int   *l_pos  = new int[m_];
-    int   *r_pos  = new int[m_];
-    float *q_val  = new float[m_];
-    
+    return cand_cnt;
+}
+
+// -----------------------------------------------------------------------------
+void RQALSH::init(                  // init assistant parameters
+    const float *query)                 // query object
+{
+    alloc();
     for (int i = 0; i < m_; ++i) {
-        q_val[i] = calc_hash_value(sample_dim, i, 0.0f, query);
-        l_pos[i] = 0;
-        r_pos[i] = n_ - 1;
+        q_val_[i] = calc_hash_value(dim_, i, query);
+        l_pos_[i] = 0;  
+        r_pos_[i] = n_ - 1;
     }
+}
 
-    // -------------------------------------------------------------------------
-    //  furthest neighbor search
-    // -------------------------------------------------------------------------
-    int num_range = 0;                // number of search range flag
-    int cand_cnt  = 0;                // candidate counter    
+// -----------------------------------------------------------------------------
+void RQALSH::init(                  // init assistant parameters
+    int   sample_dim,                   // sample dimension
+    const Result *query)                // query object
+{
+    alloc();
+    for (int i = 0; i < m_; ++i) {
+        q_val_[i] = calc_hash_value(sample_dim, i, 0.0f, query);
+        l_pos_[i] = 0;
+        r_pos_[i] = n_ - 1;
+    }
+}
+
+// -----------------------------------------------------------------------------
+void RQALSH::alloc()                // alloc space for assistant parameters
+{
+    freq_    = new int[n_];
+    checked_ = new bool[n_];
+    b_flag_  = new bool[m_];
+    r_flag_  = new bool[m_];
+    l_pos_   = new int[m_];
+    r_pos_   = new int[m_];
+    q_val_   = new float[m_];
+
+    memset(freq_,    0,     n_*sizeof(int));
+    memset(checked_, false, n_*sizeof(bool));
+    memset(b_flag_,  true,  m_*sizeof(bool));
+    memset(r_flag_,  true,  m_*sizeof(bool));
+}
+
+// -----------------------------------------------------------------------------
+int RQALSH::dynamic_separation_counting(// dynamic separation counting
+    int   l,                            // separation threshold
+    int   cand,                         // number of candidates
+    float R,                            // limited search range
+    std::vector<int> &cand_list)        // candidates (return)
+{
+    int cand_cnt  = 0;              // candidate counter
+    int num_range = 0;              // number of search range flag
+    int num_bucket, cnt, lpos, rpos, id;
     
-    float w       = 1.0f;            // grid width
-    float radius  = find_radius(w, l_pos, r_pos, q_val); // search radius
+    float w       = 1.0f;           // grid width
+    float radius  = find_radius(w); // search radius
     float width   = radius * w / 2.0f; // bucket width
     float range   = R < CHECK_ERROR ? 0.0f : R*w/2.0f; // search range
+    float q_v, ldist, rdist;
 
+    Result *table = NULL;
     while (true) {
-        // ---------------------------------------------------------------------
-        //  step 1: initialization
-        // ---------------------------------------------------------------------
-        int num_bucket = 0; memset(b_flag, true, m_*sizeof(bool));
+        // step 1: initialization
+        num_bucket = 0; memset(b_flag_, true, m_*sizeof(bool));
 
-        // ---------------------------------------------------------------------
-        //  step 2: (R,c)-FN search
-        // ---------------------------------------------------------------------
+        // step 2: (R,c)-FN search
         while (num_bucket < m_ && num_range < m_) {
             for (int j = 0; j < m_; ++j) {
-                // CANNOT add !r_flag[j] as condition, because the
-                // r_flag[j] for large radius will affect small radius
-                if (!b_flag[j]) continue;
+                // CANNOT add !r_flag_[j] as condition, because the
+                // r_flag_[j] for large radius will affect small radius
+                if (!b_flag_[j]) continue;
 
-                int    cnt = -1, lpos = -1, rpos = -1;
-                float  q_v = q_val[j], ldist = -1.0f, rdist = -1.0f;
-                Result *table = &tables_[j*n_];
-
-                // -------------------------------------------------------------
-                //  step 2.1: scan left part of bucket
-                // -------------------------------------------------------------
-                cnt  = 0;
-                lpos = l_pos[j]; rpos = r_pos[j];
+                table = &tables_[(uint64_t) j*n_];
+                q_v = q_val_[j]; ldist = rdist = -1.0f;
+                
+                // step 2.1: scan left part of bucket
+                cnt  = 0; lpos = l_pos_[j]; rpos = r_pos_[j];
                 while (cnt < SCAN_SIZE) {
                     ldist = MINREAL;
                     if (lpos < rpos) ldist = fabs(q_v - table[lpos].key_);
                     else break;
                     if (ldist < width || ldist < range) break;
 
-                    int id = table[lpos].id_;
-                    if (++freq[id] >= separation_threshold && !checked[id]) {
-                        checked[id] = true;
+                    id = table[lpos].id_;
+                    if (++freq_[id] >= l && !checked_[id]) {
+                        checked_[id] = true;
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;
@@ -338,11 +217,9 @@ int RQALSH::fns(                    // furthest neighbor search
                     ++lpos; ++cnt;
                 }
                 if (cand_cnt >= cand) break;
-                l_pos[j] = lpos;
+                l_pos_[j] = lpos;
 
-                // -------------------------------------------------------------
-                //  step 2.2: scan right part of bucket
-                // -------------------------------------------------------------
+                // step 2.2: scan right part of bucket
                 cnt = 0;
                 while (cnt < SCAN_SIZE) {
                     rdist = MINREAL;
@@ -351,8 +228,8 @@ int RQALSH::fns(                    // furthest neighbor search
                     if (rdist < width || rdist < range) break;
 
                     int id = table[rpos].id_;
-                    if (++freq[id] >= separation_threshold && !checked[id]) {
-                        checked[id] = true;
+                    if (++freq_[id] >= l && !checked_[id]) {
+                        checked_[id] = true;
                         if (index_) cand_list.push_back(index_[id]);
                         else cand_list.push_back(id);
                         if (++cand_cnt >= cand) break;
@@ -360,45 +237,69 @@ int RQALSH::fns(                    // furthest neighbor search
                     --rpos; ++cnt;
                 }
                 if (cand_cnt >= cand) break;
-                r_pos[j] = rpos;
+                r_pos_[j] = rpos;
 
-                // -------------------------------------------------------------
-                //  step 2.3: check whether this bucket is finished scanned
-                // -------------------------------------------------------------
+                // step 2.3: check whether this bucket is finished scanned
                 if (lpos >= rpos || (ldist < width && rdist < width)) {
-                    if (b_flag[j]) { b_flag[j] = false; ++num_bucket; }
+                    if (b_flag_[j]) { b_flag_[j] = false; ++num_bucket; }
                 }
                 if (lpos >= rpos || (ldist < range && rdist < range)) {
-                    if (b_flag[j]) { b_flag[j] = false; ++num_bucket; }
-                    if (r_flag[j]) { r_flag[j] = false; ++num_range;  }
+                    if (b_flag_[j]) { b_flag_[j] = false; ++num_bucket; }
+                    if (r_flag_[j]) { r_flag_[j] = false; ++num_range;  }
                 }
-                // use break after checking both b_flag and r_flag
+                // use break after checking both b_flag_ and r_flag_
                 if (num_bucket >= m_ || num_range >= m_) break;
             }
             if (num_bucket >= m_ || num_range >= m_) break;
             if (cand_cnt >= cand) break;
         }
-        // ---------------------------------------------------------------------
-        //  step 3: stop condition
-        // ---------------------------------------------------------------------
+        // step 3: stop condition
         if (num_range >= m_ || cand_cnt >= cand) break;
 
-        // ---------------------------------------------------------------------
-        //  step 4: update radius
-        // ---------------------------------------------------------------------
+        // step 4: update radius
         radius = radius / 2.0f;
         width  = radius * w / 2.0f;
     }
-    // release space
-    delete[] freq;
-    delete[] l_pos;
-    delete[] r_pos;
-    delete[] checked;
-    delete[] b_flag;
-    delete[] r_flag;
-    delete[] q_val;
-
     return cand_cnt;
+}
+
+// -----------------------------------------------------------------------------
+float RQALSH::find_radius(          // find proper radius
+    float w)                            // grid width
+{
+    // find projected distance closest to the query in each hash tables 
+    std::vector<float> list;
+    for (int i = 0; i < m_; ++i) {
+        int lpos = l_pos_[i], rpos = r_pos_[i];
+        if (lpos < rpos) {
+            float q_v = q_val_[i];
+            list.push_back(fabs(tables_[(uint64_t) i*n_+lpos].key_ - q_v));
+            list.push_back(fabs(tables_[(uint64_t) i*n_+rpos].key_ - q_v));
+        }
+    }
+    // sort the array in ascending order 
+    std::sort(list.begin(), list.end());
+
+    // find the median distance and return the new radius
+    int   num  = (int) list.size();
+    float dist = -1.0f;
+    if (num % 2 == 0) dist = (list[num / 2 - 1] + list[num / 2]) / 2.0f;
+    else dist = list[num / 2];
+    
+    int kappa = (int) ceil(log(2.0f * dist / w) / log(2.0f));
+    return pow(2.0f, kappa);
+}
+
+// -----------------------------------------------------------------------------
+void RQALSH::free()                    // free space for assistant parameters
+{
+    delete[] freq_;    freq_    = NULL;
+    delete[] l_pos_;   l_pos_   = NULL;
+    delete[] r_pos_;   r_pos_   = NULL;
+    delete[] checked_; checked_ = NULL;
+    delete[] b_flag_;  b_flag_  = NULL;
+    delete[] r_flag_;  r_flag_  = NULL;
+    delete[] q_val_;   q_val_   = NULL;
 }
 
 } // end namespace p2h
