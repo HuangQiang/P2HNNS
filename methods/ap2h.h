@@ -16,7 +16,7 @@ int linear_scan(                    // Linear Scan
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -27,20 +27,18 @@ int linear_scan(                    // Linear Scan
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
     fprintf(fp, "%s:\n", method_name);
-    float *norm_q = new float[d];
-    float dp = -1.0f;
 
     HEAD(method_name)
     for (int top_k : TOPKs) {
         gettimeofday(&g_start_time, NULL);
         MinK_List* list = new MinK_List(top_k);
+
         init_global_metric();
-        
         for (int i = 0; i < qn; ++i) {
             list->reset();
-            get_normalized_query<DType>(d, &query[i*d], norm_q);
+            const float *q = &query[i*d];
             for (int j = 0; j < n; ++j) {
-                dp = fabs(calc_ip2<DType>(d, &data[(uint64_t) j*d], norm_q));
+                float dp = fabs(calc_ip2<DType>(d, &data[(uint64_t) j*d], q));
                 list->insert(dp, j+1);
             }
             update_global_metric(top_k, n, n, &R[i*MAXK], list);
@@ -51,7 +49,6 @@ int linear_scan(                    // Linear Scan
     }
     FOOT(fp)
 
-    delete[] norm_q;
     return 0;
 }
 
@@ -66,7 +63,7 @@ int random_scan(                    // Random_Scan
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -88,7 +85,6 @@ int random_scan(                    // Random_Scan
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, method_name, cand_list)) return 1;
 
@@ -98,12 +94,11 @@ int random_scan(                    // Random_Scan
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = random->nns(top_k, cand, norm_q, list);
+                int check_k = random->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -113,7 +108,6 @@ int random_scan(                    // Random_Scan
         FOOT(fp)
     }
     delete random;
-    delete[] norm_q;
     return 0;
 }
 
@@ -128,7 +122,7 @@ int sorted_scan(                    // Sorted_Scan
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -150,7 +144,6 @@ int sorted_scan(                    // Sorted_Scan
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, method_name, cand_list)) return 1;
 
@@ -160,12 +153,11 @@ int sorted_scan(                    // Sorted_Scan
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = sorted->nns(top_k, cand, norm_q, list);
+                int check_k = sorted->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -175,7 +167,6 @@ int sorted_scan(                    // Sorted_Scan
         FOOT(fp)
     }
     delete sorted;
-    delete[] norm_q;
     return 0;
 }
 
@@ -193,7 +184,7 @@ int eh(                             // Embedding Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -215,7 +206,6 @@ int eh(                             // Embedding Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "EH", cand_list)) return 1;
 
@@ -225,12 +215,11 @@ int eh(                             // Embedding Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -240,7 +229,6 @@ int eh(                             // Embedding Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -258,7 +246,7 @@ int bh(                             // Bilinear Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -280,7 +268,6 @@ int bh(                             // Bilinear Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "BH", cand_list)) return 1;
 
@@ -290,12 +277,11 @@ int bh(                             // Bilinear Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -305,7 +291,6 @@ int bh(                             // Bilinear Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -324,7 +309,7 @@ int mh(                             // Multilinear Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -346,7 +331,6 @@ int mh(                             // Multilinear Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "MH", cand_list)) return 1;
 
@@ -356,12 +340,11 @@ int mh(                             // Multilinear Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -371,7 +354,6 @@ int mh(                             // Multilinear Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -389,7 +371,7 @@ int fh(                             // Furthest Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -411,7 +393,6 @@ int fh(                             // Furthest Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> l_list;    // a list of separation threshold
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH", l_list, cand_list)) return 1;
@@ -424,12 +405,11 @@ int fh(                             // Furthest Hyperplane Hashing
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
+
                 init_global_metric();
-            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[i*d], norm_q);
-                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    int check_k = lsh->nns(top_k, l, cand, &query[i*d], list);
                     update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
                 delete list;
@@ -440,7 +420,6 @@ int fh(                             // Furthest Hyperplane Hashing
         }
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -457,7 +436,7 @@ int fh_minus(                       // FH without Multi-Partition
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -479,7 +458,6 @@ int fh_minus(                       // FH without Multi-Partition
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> l_list;    // a list of separation threshold
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH-", l_list, cand_list)) return 1;
@@ -492,12 +470,11 @@ int fh_minus(                       // FH without Multi-Partition
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
+
                 init_global_metric();
-            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[i*d], norm_q);
-                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    int check_k = lsh->nns(top_k, l, cand, &query[i*d], list);
                     update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
                 delete list;
@@ -508,7 +485,6 @@ int fh_minus(                       // FH without Multi-Partition
         }
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -526,7 +502,7 @@ int nh(                             // Nearest Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -548,7 +524,6 @@ int nh(                             // Nearest Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "NH", cand_list)) return 1;
 
@@ -558,12 +533,11 @@ int nh(                             // Nearest Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -573,7 +547,6 @@ int nh(                             // Nearest Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -590,7 +563,7 @@ int fh_wo_s(                        // FH without Randomized Sampling
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -612,7 +585,6 @@ int fh_wo_s(                        // FH without Randomized Sampling
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> l_list;    // a list of separation threshold
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH", l_list, cand_list)) return 1;
@@ -625,12 +597,11 @@ int fh_wo_s(                        // FH without Randomized Sampling
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
+
                 init_global_metric();
-            
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[i*d], norm_q);
-                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    int check_k = lsh->nns(top_k, l, cand, &query[i*d], list);
                     update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
                 delete list;
@@ -641,7 +612,6 @@ int fh_wo_s(                        // FH without Randomized Sampling
         }
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -657,7 +627,7 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -679,7 +649,6 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> l_list;    // a list of separation threshold
     std::vector<int> cand_list; // a list of #candidates
     if (get_conf(conf_name, data_name, "FH-", l_list, cand_list)) return 1;
@@ -692,12 +661,11 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
             for (int top_k : TOPKs) {
                 gettimeofday(&g_start_time, NULL);
                 MinK_List* list = new MinK_List(top_k);
+
                 init_global_metric();
-                
                 for (int i = 0; i < qn; ++i) {
                     list->reset();
-                    get_normalized_query<DType>(d, &query[i*d], norm_q);
-                    int check_k = lsh->nns(top_k, l, cand, norm_q, list);
+                    int check_k = lsh->nns(top_k, l, cand, &query[i*d], list);
                     update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
                 }
                 delete list;
@@ -708,7 +676,6 @@ int fh_minus_wo_s(                  // FH- without Randomized Sampling
         }
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -725,7 +692,7 @@ int nh_wo_s(                        // NH without Randomized Sampling
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -747,7 +714,6 @@ int nh_wo_s(                        // NH without Randomized Sampling
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "NH", cand_list)) return 1;
 
@@ -757,12 +723,11 @@ int nh_wo_s(                        // NH without Randomized Sampling
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -772,7 +737,6 @@ int nh_wo_s(                        // NH without Randomized Sampling
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -789,7 +753,7 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -811,7 +775,6 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "EH", cand_list)) return 1;
 
@@ -821,12 +784,11 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -836,7 +798,6 @@ int orig_eh(                        // Original Embedding Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -853,7 +814,7 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -875,7 +836,6 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "BH", cand_list)) return 1;
 
@@ -885,12 +845,11 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -900,7 +859,6 @@ int orig_bh(                        // Original Bilinear Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 
@@ -919,7 +877,7 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
     const char *method_name,            // name of method
     const char *path,                   // output path
     const DType *data,                  // data set
-    const DType *query,                 // query set
+    const float *query,                 // query set
     const Result *R)                    // truth set
 {
     char fname[200]; sprintf(fname, "%s_%s.out", path, method_name);
@@ -941,7 +899,6 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
     // -------------------------------------------------------------------------
     //  Point-to-Hyperplane NNS
     // -------------------------------------------------------------------------
-    float *norm_q = new float[d];
     std::vector<int> cand_list;
     if (get_conf(conf_name, data_name, "MH", cand_list)) return 1;
 
@@ -951,12 +908,11 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
         for (int top_k : TOPKs) {
             gettimeofday(&g_start_time, NULL);
             MinK_List* list = new MinK_List(top_k);
+
             init_global_metric();
-            
             for (int i = 0; i < qn; ++i) {
                 list->reset();
-                get_normalized_query<DType>(d, &query[i*d], norm_q);
-                int check_k = lsh->nns(top_k, cand, norm_q, list);
+                int check_k = lsh->nns(top_k, cand, &query[i*d], list);
                 update_global_metric(top_k, check_k, n, &R[i*MAXK], list);
             }
             delete list;
@@ -966,7 +922,6 @@ int orig_mh(                        // Original Multilinear Hyperplane Hashing
         FOOT(fp)
     }
     delete lsh;
-    delete[] norm_q;
     return 0;
 }
 

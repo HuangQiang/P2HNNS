@@ -140,22 +140,6 @@ void calc_and_write_global_metric(  // init the global metric
 
 // -----------------------------------------------------------------------------
 template<class DType>
-int read_bin_data(                  // read binary data/query set from disk
-    int   n,                            // number of data/query points
-    int   d,                            // dimensionality
-    const char *fname,                  // address of data/query set
-    DType *data)                        // data/query (return)
-{
-    FILE *fp = fopen(fname, "rb");
-    if (!fp) { printf("Could not open %s\n", fname); return 1; }
-    
-    fread(data, sizeof(DType), (uint64_t) n*d, fp);
-    fclose(fp);
-    return 0;
-}
-
-// -----------------------------------------------------------------------------
-template<class DType>
 float calc_ip(                      // calc inner product
     int   dim,                          // dimension
     const DType *p1,                    // 1st point
@@ -194,13 +178,47 @@ float calc_cosine_angle(            // calc cosine angle, [-1,1]
 
 // -----------------------------------------------------------------------------
 template<class DType>
+int read_bin_data(                  // read binary data set from disk
+    int   n,                            // number of data points
+    int   d,                            // dimensionality
+    const char *fname,                  // address of data set
+    DType *data)                        // data (return)
+{
+    FILE *fp = fopen(fname, "rb");
+    if (!fp) { printf("Could not open %s\n", fname); return 1; }
+    
+    fread(data, sizeof(DType), (uint64_t) n*d, fp);
+    fclose(fp);
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
+template<class DType>
 void get_normalized_query(          // get normalized query
     int   d,                            // dimension
-    const DType *query,                 // input query
+    const DType *orig_query,            // original query
     float *norm_q)                      // normalized query (return)
 {
-    float norm = sqrt(calc_ip<DType>(d-1, query, query));
-    for (int i = 0; i < d; ++i) norm_q[i] = query[i] / norm;
+    float norm = sqrt(calc_ip<DType>(d-1, orig_query, orig_query));
+    for (int i = 0; i < d; ++i) norm_q[i] = orig_query[i] / norm;
+}
+
+// -----------------------------------------------------------------------------
+template<class DType>
+int read_bin_query(                 // read binary query set from disk
+    int   qn,                           // number of query points
+    int   d,                            // dimensionality
+    const char *fname,                  // address of query set
+    float *query)                       // query (return)
+{
+    DType *orig_query = new DType[qn*d];
+    if (read_bin_data<DType>(qn, d, fname, orig_query)) return 1;
+
+    for (int i = 0; i < qn; ++i) {
+        get_normalized_query<DType>(d, &orig_query[i*d], &query[i*d]);
+    }
+    delete[] orig_query;
+    return 0;
 }
 
 // -----------------------------------------------------------------------------
@@ -215,30 +233,27 @@ void norm_distribution(             // histogram of l2-norm of data
 
     // find l2-norm of data objects, and calc min, max, mean, and std
     std::vector<float> norm(n, 0.0f);
-    float max_norm  = MINREAL;
-    float min_norm  = MAXREAL;
-    float mean_norm = 0.0f;
+    float max_norm = MINREAL, min_norm = MAXREAL;
+    float mean = 0.0f;
     for (int i = 0; i < n; ++i) {
-        norm[i] = sqrt(calc_ip<DType>(d-1, &data[i*d], &data[i*d]));
+        const DType *point = &data[(uint64_t) i*d];
+        norm[i] = sqrt(calc_ip<DType>(d-1, point, point));
         
-        mean_norm += norm[i];
+        mean += norm[i];
         if (norm[i] > max_norm) max_norm = norm[i];
         else if (norm[i] < min_norm) min_norm = norm[i];
     }
-    mean_norm /= n;
+    mean /= n;
 
     float std = 0.0f;
-    for (int i = 0; i < n; ++i) {
-        std += SQR(mean_norm - norm[i]);
-    }
+    for (int i = 0; i < n; ++i) std += SQR(mean - norm[i]);
     std = sqrt(std / n);
-    printf("min = %f, max = %f, mean = %f, std = %f\n", min_norm, max_norm, 
-        mean_norm, std);
+    printf("min=%f, max=%f, mean=%f, std=%f\n", min_norm, max_norm, mean, std);
 
     // get the percentage of frequency of norm
     int m = M;
     float interval = (max_norm - min_norm) / m;
-    printf("n = %d, m = %d, interval = %f\n", n, m, interval);
+    printf("n=%d, m=%d, interval=%f\n", n, m, interval);
 
     std::vector<int> freq(m, 0);
     for (int i = 0; i < n; ++i) {
@@ -275,46 +290,42 @@ void angle_distribution(            // histogram of angle between data and query
     int   d,                            // dimension of space
     const char *path,                   // output path
     const DType *data,                  // data  objects
-    const DType *query)                 // query objects
+    const float *query)                 // query objects
 {
     gettimeofday(&g_start_time, NULL);
 
     // calc the angle between data and query, and min, max, mean, std
-    uint64_t N = n * qn;
-    float *norm_q = new float[d];
+    uint64_t N = (uint64_t) n * qn;
     std::vector<std::vector<double> > angle(qn, std::vector<double>(n, 0.0));
     
-    double max_angle  = MINREAL;
-    double min_angle  = MAXREAL;
-    double this_angle, mean_angle = 0.0;
+    double max_angle = MINREAL, min_angle = MAXREAL;
+    double tmp, mean = 0.0;
     for (int i = 0; i < qn; ++i) {
-        get_normalized_query<DType>(d, &query[i*d], norm_q);
+        const float *q = &query[i*d];
         for (int j = 0; j < n; ++j) {
-            this_angle = fabs(calc_cosine_angle<DType>(d, &data[j*d], norm_q));
-            assert(this_angle >= 0 && this_angle <= 1);
+            tmp = fabs(calc_cosine_angle<DType>(d, &data[(uint64_t)j*d], q));
+            assert(tmp >= 0 && tmp <= 1);
 
-            angle[i][j]  = this_angle;
-            mean_angle  += this_angle;
-            if (this_angle > max_angle) max_angle = this_angle;
-            else if (this_angle < min_angle) min_angle = this_angle;
+            angle[i][j] = tmp; mean += tmp;
+            if (tmp > max_angle) max_angle = tmp;
+            else if (tmp < min_angle) min_angle = tmp;
         }
     }
-    mean_angle = mean_angle / N;
+    mean /= N;
 
     double std = 0.0;
     for (int i = 0; i < qn; ++i) {
         for (int j = 0; j < n; ++j) {
-            std += SQR(mean_angle - angle[i][j]);
+            std += SQR(mean - angle[i][j]);
         }
     }
     std = sqrt(std / N);
-    printf("min = %lf, max = %lf, mean = %lf, std = %lf\n", min_angle,
-        max_angle, mean_angle, std);
+    printf("min=%lf, max=%lf, mean=%lf, std=%lf\n", min_angle, max_angle, mean, std);
 
     // get the percentage of frequency of angle
     int m = M; // split m partitions in [0, 1]
     double interval = (max_angle - min_angle) / m;
-    printf("n = %d, qn = %d, m = %d, interval = %lf\n", n, qn, m, interval);
+    printf("n=%d, qn=%d, m=%d, interval=%lf\n", n, qn, m, interval);
 
     std::vector<uint64_t> freq(m, 0);
     for (int i = 0; i < qn; ++i) {
@@ -338,7 +349,6 @@ void angle_distribution(            // histogram of angle between data and query
     }
     fprintf(fp, "\n");
     fclose(fp);
-    delete[] norm_q;
 
     gettimeofday(&g_end_time, NULL);
     float runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
@@ -352,15 +362,14 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
     int   n,                            // number of data  objects
     int   qn,                           // number of query objects
     int   d,                            // dimension of space
-    const char *path,                   // output path
+    const char  *path,                  // output path
     const DType *data,                  // data  objects
-    const DType *query)                 // query objects
+    const float *query)                 // query objects
 {
     gettimeofday(&g_start_time, NULL);
 
     // calc the angle between data and query, and min, max, mean, std
-    uint64_t N = n * qn;
-    float *norm_q = new float[d];
+    uint64_t N = (uint64_t) n * qn;
     std::vector<double> norm(n, 0.0);
     std::vector<std::vector<double> > angle(n, std::vector<double>(qn, 0.0));
 
@@ -373,7 +382,8 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
     
     for (int i = 0; i < n; ++i) {
         // calc mean, min, max of l2-norm
-        norm[i] = sqrt(calc_ip<DType>(d-1, &data[i*d], &data[i*d]));
+        const DType *point = &data[(uint64_t) i*d];
+        norm[i] = sqrt(calc_ip<DType>(d-1, point, point));
         
         mean_norm += norm[i];
         if (norm[i] > max_norm) max_norm = norm[i];
@@ -381,14 +391,12 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
 
         for (int j = 0; j < qn; ++j) {
             // calc mean, min, max of |cos(angle)|
-            get_normalized_query<DType>(d, &query[j*d], norm_q);
+            float tmp = fabs(calc_cosine_angle<DType>(d, point, &query[j*d]));
+            assert(tmp >= 0 && tmp <= 1);
 
-            angle[i][j] = fabs(calc_cosine_angle<DType>(d, &data[i*d], norm_q));
-            assert(angle[i][j] >= 0 && angle[i][j] <= 1);
-
-            mean_angle  += angle[i][j];
-            if (angle[i][j] > max_angle) max_angle = angle[i][j];
-            else if (angle[i][j] < min_angle) min_angle = angle[i][j];
+            angle[i][j] = tmp; mean_angle += tmp;
+            if (tmp > max_angle) max_angle = tmp;
+            else if (tmp < min_angle) min_angle = tmp;
         }
     }
     mean_norm /= n; mean_angle /= N;
@@ -403,17 +411,17 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
     }
     std_norm  = sqrt(std_norm  / n);
     std_angle = sqrt(std_angle / N);
-    printf("l2-norm:      min = %lf, max = %lf, mean = %lf, std = %lf\n", 
+    printf("l2-norm:      min=%lf, max=%lf, mean=%lf, std=%lf\n", 
         min_norm, max_norm, mean_norm, std_norm);
-    printf("|cos(angle)|: min = %lf, max = %lf, mean = %lf, std = %lf\n", 
+    printf("|cos(angle)|: min=%lf, max=%lf, mean=%lf, std=%lf\n", 
         min_angle, max_angle, mean_angle, std_angle);
 
     // get the percentage of frequency of angle
     int    m = M; // split m partitions in [0, 1]
     double interval_norm  = (max_norm  - min_norm)  / m;
     double interval_angle = (max_angle - min_angle) / m;
-    printf("n = %d, qn = %d, m = %d, interval_norm = %lf, "
-        "interval_angle = %lf\n", n, qn, m, interval_norm, interval_angle);
+    printf("n=%d, qn=%d, m=%d, interval_norm=%lf, interval_angle=%lf\n",
+        n, qn, m, interval_norm, interval_angle);
 
     std::vector<std::vector<uint64_t> > freq(m, std::vector<uint64_t>(m, 0));
     for (int i = 0; i < n; ++i) {
@@ -441,7 +449,6 @@ void heatmap(                       // heatmap between l2-norm and |cos \theta|
         fprintf(fp, "\n");
     }
     fclose(fp);
-    delete[] norm_q;
 
     gettimeofday(&g_end_time, NULL);
     float runtime = g_end_time.tv_sec - g_start_time.tv_sec + 
@@ -455,26 +462,25 @@ int ground_truth(                   // find ground truth results
     int   n,                            // number of data  objects
     int   qn,                           // number of query objects
     int   d,                            // dimension of space
-    const char *truth_set,              // address of truth set
-    const char *path,                   // output path
+    const char  *truth_set,             // address of truth set
+    const char  *path,                  // output path
     const DType *data,                  // data  objects
-    const DType *query)                 // query objects
+    const float *query)                 // query objects
 {
     gettimeofday(&g_start_time, NULL);
     FILE *fp = fopen(truth_set, "w");
     if (!fp) { printf("Could not create %s\n", truth_set); return 1; }
 
-    float *norm_q = new float[d];
+    // grouth truth
     MinK_List *list = new MinK_List(MAXK);
-
     fprintf(fp, "%d,%d\n", qn, MAXK);
     for (int i = 0; i < qn; ++i) {
         // find grouth-truth results by linear scan
         list->reset();
-        get_normalized_query<DType>(d, &query[i*d], norm_q);
+        const float *q = &query[i*d];
         for (int j = 0; j < n; ++j) {
-            float dp = fabs(calc_ip2<DType>(d, &data[j*d], norm_q));
-            list->insert(dp, j + 1);
+            float dp = fabs(calc_ip2<DType>(d, &data[(uint64_t)j*d], q));
+            list->insert(dp, j+1);
         }
         // write groound truth results for each query
         fprintf(fp, "%d", i + 1);
@@ -485,7 +491,6 @@ int ground_truth(                   // find ground truth results
     }
     fclose(fp);
     delete list;
-    delete[] norm_q;
     
     gettimeofday(&g_end_time, NULL);
     float truth_time = g_end_time.tv_sec - g_start_time.tv_sec + 

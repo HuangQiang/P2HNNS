@@ -112,8 +112,8 @@ void interface(                     // interface for calling function
     DType *data = new DType[(uint64_t) n*d];
     if (read_bin_data<DType>(n, d, data_set, data)) exit(1);
 
-    DType *query = new DType[qn*d];
-    if (read_bin_data<DType>(qn, d, query_set, query)) exit(1);
+    float *query = new float[qn*d];
+    if (read_bin_query<DType>(qn, d, query_set, query)) exit(1);
 
     Result *R = NULL; // ground truth results
     if (alg > 0) {
@@ -129,70 +129,70 @@ void interface(                     // interface for calling function
     switch (alg) {
     case 0:
         ground_truth<DType>(n, qn, d, truth_set, path, (const DType*) data,
-            (const DType*) query);
+            (const float*) query);
         break;
     case 1:
         linear_scan<DType>(n, qn, d, "Linear_Scan", path, (const DType*) data,
-            (const DType*) query, (const Result*) R);
+            (const float*) query, (const Result*) R);
         break;
     case 2:
         random_scan<DType>(n, qn, d, conf_name, data_name, "Random_Scan", path,
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 3:
         sorted_scan<DType>(n, qn, d, conf_name, data_name, "Sorted_Scan", path,
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 4:
         if (I == 0) {
             eh<DType>(n, qn, d, m, l, b, conf_name, data_name, "EH", path,
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         } else {
             orig_eh<DType>(n, qn, d, m, l, conf_name, data_name, "Orig_EH", path,
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         }
         break;
     case 5:
         if (I == 0) {
             bh<DType>(n, qn, d, m, l, b, conf_name, data_name, "BH", path,
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         } else {
             orig_bh<DType>(n, qn, d, m, l, conf_name, data_name, "Orig_BH", path, 
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         }
         break;
     case 6:
         if (I == 0) {
             mh<DType>(n, qn, d, M, m, l, b, conf_name, data_name, "MH", path,
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         } else {
             orig_mh<DType>(n, qn, d, M, m, l, conf_name, data_name, "Orig_MH", path,
-                (const DType*) data, (const DType*) query, (const Result*) R);
+                (const DType*) data, (const float*) query, (const Result*) R);
         }
         break;
     case 7:
         fh<DType>(n, qn, d, m, s, b, conf_name, data_name, "FH", path, 
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 8:
         fh_minus<DType>(n, qn, d, m, s, conf_name, data_name, "FH_Minus", path, 
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 9:
         nh<DType>(n, qn, d, m, s, w, conf_name, data_name, "NH", path, 
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 10:
         fh_wo_s<DType>(n, qn, d, m, b, conf_name, data_name, "FH_wo_S", path,
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 11:
         fh_minus_wo_s<DType>(n, qn, d, m, conf_name, data_name, "FH_Minus_wo_S", 
-            path, (const DType*) data, (const DType*) query, (const Result*) R);
+            path, (const DType*) data, (const float*) query, (const Result*) R);
         break;
     case 12:
         nh_wo_s<DType>(n, qn, d, m, w, conf_name, data_name, "NH_wo_S", path,
-            (const DType*) data, (const DType*) query, (const Result*) R);
+            (const DType*) data, (const float*) query, (const Result*) R);
         break;
     default:
         printf("Parameters error!\n"); usage();
