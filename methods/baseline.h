@@ -40,14 +40,14 @@ public:
     uint64_t get_memory_usage() {   // get memory usage
         uint64_t ret = 0;
         ret += sizeof(*this);
-        ret += sizeof(int)*n_; // random_id
+        ret += sizeof(int)*n_; // index
         return ret;
     }
 
 protected:
     int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
-    int   *random_id_;              // randon data index
+    int   *index_;                  // randon data index
     const DType *data_;             // data objects
 };
 
@@ -59,19 +59,19 @@ Random_Scan<DType>::Random_Scan(    // constructor
     const DType *data)                  // input data
     : n_(n), dim_(d), data_(data)
 {
-    // get random index by random shuffle
-    random_id_ = new int[n];
+    index_ = new int[n];
 
+    // init index_ with 0,1,2,... & get the random index by random shuffle
     int i = 0;
-    std::iota(random_id_, random_id_+n, i++);
-    std::random_shuffle(random_id_, random_id_+n);
+    std::iota(index_, index_+n, i++);
+    std::random_shuffle(index_, index_+n);
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
 Random_Scan<DType>::~Random_Scan()  // destructor
 {
-    delete[] random_id_;
+    delete[] index_;
 }
 
 // -----------------------------------------------------------------------------
@@ -92,14 +92,13 @@ int Random_Scan<DType>::nns(        // point-to-hyperplane NNS
     const float *query,                 // input query
     MinK_List *list)                    // top-k results (return)
 {
-    int   verif_cnt = std::min(nc+top_k-1, n_), idx = -1;
-    float dist = -1.0f;
-    for (int i = 0; i < verif_cnt; ++i) {
-        idx  = random_id_[i];
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
-        list->insert(dist, idx+1);
+    int cand = std::min(nc + top_k - 1, n_);
+    for (int i = 0; i < cand; ++i) {
+        const DType *point = &data_[(uint64_t) index_[i]*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        list->insert(dist, index_[i]+1);
     }
-    return verif_cnt;
+    return cand;
 }
 
 // -----------------------------------------------------------------------------
@@ -130,14 +129,14 @@ public:
     uint64_t get_memory_usage() {   // get memory usage
         uint64_t ret = 0;
         ret += sizeof(*this);
-        ret += sizeof(int)*n_; // sorted_id
+        ret += sizeof(int)*n_; // index_
         return ret;
     }
 
 protected:
     int   n_;                       // number of data objects
     int   dim_;                     // dimension of data objects
-    int   *sorted_id_;              // sorted data index
+    int   *index_;                  // sorted data index
     const DType *data_;             // data objects
 };
 
@@ -149,30 +148,27 @@ Sorted_Scan<DType>::Sorted_Scan(    // constructor
     const DType *data)                  // input data
     : n_(n), dim_(d), data_(data)
 {
-    // init the sorted_id_ with 0,1,2,...
-    sorted_id_ = new int[n];
+    index_ = new int[n];
+    // init index_ with 0,1,2,...
     int i = 0;
-    std::iota(sorted_id_, sorted_id_+n, i++);
+    std::iota(index_, index_+n, i++);
 
-    // calc the l2_norms of all data points
-    float *l2_norms = new float[n];
+    // calc the l2 norms of all data points
+    float *norms = new float[n];
     for (i = 0; i < n; ++i) {
         const DType *point = &data[(uint64_t) i*d];
-        l2_norms[i] = sqrt(calc_ip<DType>(d-1, point, point));
+        norms[i] = sqrt(calc_ip<DType>(d-1, point, point));
     }
     // sort data points by their l2-norms in ascending order
-    std::sort(sorted_id_, sorted_id_ + n, 
-        [&](int i,int j){return l2_norms[i]<l2_norms[j];});
-
-    // release space
-    delete[] l2_norms;
+    std::sort(index_, index_+n, [&](int i,int j){return norms[i]<norms[j];});
+    delete[] norms;
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
 Sorted_Scan<DType>::~Sorted_Scan()  // destructor
 {
-    delete[] sorted_id_;
+    delete[] index_;
 }
 
 // -----------------------------------------------------------------------------
@@ -193,14 +189,13 @@ int Sorted_Scan<DType>::nns(        // point-to-hyperplane NNS
     const float *query,                 // input query
     MinK_List *list)                    // top-k results (return)
 {
-    int   verif_cnt = std::min(nc+top_k-1, n_), idx = -1;
-    float dist = -1.0f;
-    for (int i = 0; i < verif_cnt; ++i) {
-        idx  = sorted_id_[i];
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
-        list->insert(dist, idx+1);
+    int cand = std::min(nc + top_k - 1, n_);
+    for (int i = 0; i < cand; ++i) {
+        const DType *point = &data_[(uint64_t) index_[i]*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        list->insert(dist, index_[i]+1);
     }
-    return verif_cnt;
+    return cand;
 }
 
 // -----------------------------------------------------------------------------
@@ -236,9 +231,8 @@ public:
     uint64_t get_memory_usage() {   // get memory usage
         uint64_t ret = 0;
         ret += sizeof(*this);
-        ret += sizeof(int)*n_; // sorted_id_
+        ret += sizeof(int)*n_; // index_
         ret += sizeof(int)*block_num_.capacity(); // block_num_
-
         // index of block_
         for (size_t i = 0; i < block_num_.size(); ++i) {
             ret += sizeof(*hash_[i]);
@@ -256,14 +250,14 @@ protected:
     float b_;                       // interval ratio
     const DType *data_;             // data objects
 
-    int *sorted_id_;                // sorted data index
+    int   *index_;                  // sorted data index
     std::vector<int> block_num_;    // block numbers
     std::vector<Basic_Hash<DType>*> hash_; // index of blocks
 
     // -------------------------------------------------------------------------
-    void copy_and_norm(             // copy & normalize orig data to sorted data
+    void copy_and_norm(             // copy & normalize the original data
         float norm,                     // l2 norm of original data
-        const DType *data,              // original data
+        const DType *orig_data,         // original data
         float *sorted_data);            // sorted data (return)
 };
 
@@ -288,15 +282,13 @@ Angular_Hash<DType>::Angular_Hash(  // constructor
     }
     qsort(arr, n, sizeof(Result), ResultComp);
 
-    // get the sorted id and sorted normalized data
-    sorted_id_ = new int[n];
+    // get the sorted id (index_) and sorted normalized data
+    index_ = new int[n];
     float *sorted_data = new float[(uint64_t) n*d];
     for (int i = 0; i < n; ++i) {
-        int   idx  = arr[i].id_;
-        float norm = arr[i].key_;
-
-        sorted_id_[i] = idx;
-        copy_and_norm(norm, &data[(uint64_t)idx*d], &sorted_data[(uint64_t)i*d]);
+        index_[i] = arr[i].id_;
+        const DType *point = &data_[(uint64_t)index_[i]*d];
+        copy_and_norm(arr[i].key_, point, &sorted_data[(uint64_t)i*d]);
     }
 
     // divide datasets into blocks and build hash tables for each block
@@ -310,18 +302,15 @@ Angular_Hash<DType>::Angular_Hash(  // constructor
             if (++cnt >= MAX_BLOCK_NUM) break;
         }
         // add a block
-        Basic_Hash<DType> *hash = NULL;
+        Basic_Hash<DType> *hash = nullptr;
         if (M == 1) {
-            hash = new EH_Hash<DType>(cnt, d, m, l, 
-                (const int*) sorted_id_ + start, 
+            hash = new EH_Hash<DType>(cnt, d, m, l, (const int*)index_+start, 
                 (const float*) sorted_data + (uint64_t) start*d);
         } else if (M == 2) {
-            hash = new BH_Hash<DType>(cnt, d, m, l, 
-                (const int*) sorted_id_ + start, 
+            hash = new BH_Hash<DType>(cnt, d, m, l, (const int*)index_+start, 
                 (const float*) sorted_data + (uint64_t) start*d);
         } else {
-            hash = new MH_Hash<DType>(cnt, d, M, m, l, 
-                (const int*) sorted_id_ + start, 
+            hash = new MH_Hash<DType>(cnt, d, M, m, l, (const int*)index_+start,
                 (const float*) sorted_data + (uint64_t) start*d);
         }
         hash_.push_back(hash);
@@ -337,23 +326,19 @@ Angular_Hash<DType>::Angular_Hash(  // constructor
 template<class DType>
 void Angular_Hash<DType>::copy_and_norm(// copy & normalize orig data to sorted data
     float norm,                         // l2 norm of original data
-    const DType *data,                  // original data
+    const DType *orig_data,             // original data
     float *sorted_data)                 // sorted data (return)
 {
-    for (int j = 0; j < dim_; ++j) {
-        sorted_data[j] = data[j] / norm;
-    }
+    for (int j = 0; j < dim_; ++j) sorted_data[j] = orig_data[j] / norm;
 }
 
 // -----------------------------------------------------------------------------
 template<class DType>
 Angular_Hash<DType>::~Angular_Hash()// destructor
 {
-    delete[] sorted_id_;
+    delete[] index_;
     if (!hash_.empty()) {
-        for (int i = 0; i < hash_.size(); ++i) {
-            delete hash_[i];
-        }
+        for (int i = 0; i < hash_.size(); ++i) delete hash_[i];
         std::vector<Basic_Hash<DType>*>().swap(hash_);
     }
     std::vector<int>().swap(block_num_);
@@ -370,7 +355,7 @@ void Angular_Hash<DType>::display() // display parameters
     printf("m       = %d\n",   m_);
     printf("l       = %d\n",   l_);
     printf("b       = %.2f\n", b_);
-    printf("#blocks = %d\n",   (int) block_num_.size());
+    printf("#blocks = %lu\n",  block_num_.size());
     printf("\n");
 }
 
@@ -383,17 +368,17 @@ int Angular_Hash<DType>::nns(       // point-to-hyperplane NNS
     MinK_List *list)                    // top-k results (return)
 {
     cand += top_k - 1;
-    int verif_cnt = 0;
 
+    int cand_cnt = 0; // candidate conuter
     for (int i = 0; i < block_num_.size(); ++i) {
         // check #candidates according to the ratio of block size
         int block_cand = (int) ceil((float) block_num_[i] * cand / n_);
-        block_cand = std::min(block_cand, cand - verif_cnt);
-        verif_cnt += hash_[i]->nns(block_cand, data_, query, list);
+        block_cand = std::min(block_cand, cand - cand_cnt);
 
-        if (verif_cnt >= cand) break;
+        cand_cnt += hash_[i]->nns(block_cand, data_, query, list);
+        if (cand_cnt >= cand) break;
     }
-    return verif_cnt;
+    return cand_cnt;
 }
 
 } // end namespace p2h

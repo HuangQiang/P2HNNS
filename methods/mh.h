@@ -92,7 +92,6 @@ MH_Hash<DType>::MH_Hash(            // constructor
     for (size_t i = 0; i < size; ++i) {
         projv_[i] = gaussian(0.0f, 1.0f);
     }
-
     // build hash table for the hash values of data objects
     std::vector<SigType> sigs(l);
     for (int i = 0; i < n; ++i) {
@@ -129,10 +128,7 @@ float MH_Hash<DType>::calc_hash_value(// calc hash value
 {
     float product = 1.0f;
     for (int i = 0; i < M_; ++i) {
-        const float *vec = &proj[i*dim_];
-        float val = 0.0f;
-        for (int j = 0; j < dim_; ++j) val += data[j] * vec[j];
-        
+        float val = calc_ip<float>(dim_, data, &proj[i*dim_]);
         product *= val;
     }
     return product;
@@ -156,16 +152,16 @@ int MH_Hash<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(l_);
     get_sig_query(query, sigs);
 
-    int   verif_cnt = 0, did = -1;
-    float dist = -1.0f;
+    int cand_cnt = 0;
     buckets_.for_cand(cand, sigs, [&](int idx) {
         // verify the true distance of idx
-        did  = index_[idx];
-        dist = fabs(calc_ip2<DType>(dim_, &data[(uint64_t)did*dim_], query));
-        list->insert(dist, did + 1);
-        ++verif_cnt;
+        const DType *point = &data[(uint64_t) index_[idx]*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        
+        list->insert(dist, index_[idx] + 1);
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
@@ -273,7 +269,6 @@ Orig_MH<DType>::Orig_MH(            // constructor
     for (size_t i = 0; i < size; ++i) {
         projv_[i] = gaussian(0.0f, 1.0f);
     }
-
     // build hash table for the hash values of data objects
     std::vector<SigType> sigs(l);
     for (int i = 0; i < n; ++i) {
@@ -311,10 +306,7 @@ float Orig_MH<DType>::calc_hash_value(// calc hash value
 {
     float product = 1.0f;
     for (int i = 0; i < M_; ++i) {
-        const float *vec = &proj[i*dim_];
-        float val = 0.0f;
-        for (int j = 0; j < dim_; ++j) val += data[j] * vec[j];
-        
+        float val = calc_ip2<HType>(dim_, data, &proj[i*dim_]);
         product *= val;
     }
     return product;
@@ -351,15 +343,16 @@ int Orig_MH<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(l_);
     get_sig_query(query, sigs);
 
-    int   verif_cnt = 0;
-    float dist = -1.0f;
+    int cand_cnt = 0;
     buckets_.for_cand(cand, sigs, [&](int idx){
         // verify the true distance of idx
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t) idx*dim_], query));
+        const DType *point = &data_[(uint64_t) idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        
         list->insert(dist, idx+1);
-        ++verif_cnt;
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------

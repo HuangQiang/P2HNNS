@@ -53,7 +53,7 @@ public:
     }
 
 protected:
-    int    n_pts_;                  // number of data objects
+    int    n_;                      // number of data objects
     int    dim_;                    // dimension of data objects
     int    sample_dim_;             // sample dimension
     int    fh_dim_;                 // new data dimension after transformation
@@ -83,7 +83,7 @@ FH_Minus<DType>::FH_Minus(          // constructor
     int   m,                            // #hash tables
     int   s,                            // scale factor of dimension
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), sample_dim_(d*s), fh_dim_(d*(d+1)/2+1), data_(data)
+    : n_(n), dim_(d), sample_dim_(d*s), fh_dim_(d*(d+1)/2+1), data_(data)
 {
     assert(sample_dim_ <= fh_dim_-1);
     lsh_ = new RQALSH(n, fh_dim_, m, NULL);
@@ -193,7 +193,7 @@ template<class DType>
 void FH_Minus<DType>::display()     // display parameters
 {
     printf("Parameters of FH_Minus:\n");
-    printf("n          = %d\n", n_pts_);
+    printf("n          = %d\n", n_);
     printf("dim        = %d\n", dim_);
     printf("sample_dim = %d\n", sample_dim_);
     printf("fh_dim     = %d\n", fh_dim_);
@@ -218,20 +218,18 @@ int FH_Minus<DType>::nns(           // point-to-hyperplane NNS
 
     // conduct furthest neighbor search by rqalsh
     std::vector<int> cand_list;
-    int verif_cnt = lsh_->fns(l, cand+top_k-1, MINREAL, sample_d,
+    int cand_cnt = lsh_->fns(l, cand+top_k-1, MINREAL, sample_d,
         (const Result*) sample_query, cand_list);
 
     // calc the actual distance for candidates returned by rqalsh
-    int   idx  = -1;
-    float dist = -1.0f;
-    for (int i = 0; i < verif_cnt; ++i) {
-        idx  = cand_list[i];
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+    for (int idx : cand_list) {
+        const DType *point = &data_[(uint64_t) idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
         list->insert(dist, idx+1);
     }
     delete[] sample_query;
 
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
@@ -329,7 +327,7 @@ public:
     }
 
 protected:
-    int    n_pts_;                  // number of data objects
+    int    n_;                      // number of data objects
     int    dim_;                    // dimension of data objects
     int    fh_dim_;                 // new data dimension after transformation
     float  M_;                      // max l2-norm of o' after transformation
@@ -363,12 +361,12 @@ FH_Minus_wo_S<DType>::FH_Minus_wo_S(// constructor
     int   d,                            // dimension of data objects
     int   m,                            // #hash tables
     const DType *data)                  // input data
-    : n_pts_(n), dim_(d), fh_dim_(d*(d+1)/2+1), data_(data)
+    : n_(n), dim_(d), fh_dim_(d*(d+1)/2+1), data_(data)
 {
     // init the max l2-norm-sqr (M_) and calc the l2-norm
     float *norms = new float[n];
     M_ = MINREAL;
-    for (int i = 0; i < n_pts_; ++i) {
+    for (int i = 0; i < n_; ++i) {
         norms[i] = calc_transform_data_norm(&data[(uint64_t) i*d]);
         if (M_ < norms[i]) M_ = norms[i];
     }
@@ -443,7 +441,7 @@ template<class DType>
 void FH_Minus_wo_S<DType>::display()// display parameters
 {
     printf("Parameters of FH_Minus_wo_S:\n");
-    printf("n        = %d\n", n_pts_);
+    printf("n        = %d\n", n_);
     printf("dim      = %d\n", dim_);
     printf("fh_dim   = %d\n", fh_dim_);
     printf("m        = %d\n", lsh_->m_);
@@ -466,19 +464,18 @@ int FH_Minus_wo_S<DType>::nns(      // point-to-hyperplane NNS
 
     // conduct furthest neighbor search by rqalsh
     std::vector<int> cand_list;
-    int verif_cnt = lsh_->fns(l, cand+top_k-1, MINREAL, 
+    int cand_cnt = lsh_->fns(l, cand+top_k-1, MINREAL, 
         (const float*) fh_query, cand_list);
 
     // calc actual distance for candidates returned by qalsh
-    for (int i = 0; i < verif_cnt; ++i) {
-        int   idx  = cand_list[i];
-        float dist = fabs(calc_ip2<DType>(dim_, 
-            &data_[(uint64_t) idx*dim_], query));
+    for (int idx : cand_list) {
+        const DType *point = &data_[(uint64_t) idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
         list->insert(dist, idx + 1);
     }
     delete[] fh_query;
 
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------

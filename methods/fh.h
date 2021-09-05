@@ -50,7 +50,7 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += sizeof(float)*fh_dim_; // centroid_
-        ret += sizeof(int)*n_;        // shift_id_
+        ret += sizeof(int)*n_;        // index_
         for (auto hash : hash_) {     // blocks_
             ret += hash->get_memory_usage();
         }
@@ -65,7 +65,7 @@ protected:
     float M_;                       // max l2-norm sqr of o'
     const DType *data_;             // original data objects
 
-    int *shift_id_;                 // shift data id
+    int   *index_;                  // shift data index
     std::vector<RQALSH*> hash_;     // blocks
 
     // -------------------------------------------------------------------------
@@ -114,8 +114,8 @@ FH<DType>::FH(                      // constructor
     memset(centroid, 0.0f, fh_dim_*sizeof(float));
     M_ = MINREAL;
     for (int i = 0; i < n; ++i) {
-        transform_data(&data[(uint64_t)i*d], sample_d[i], norm[i],
-            &sample_data[(uint64_t)i*sample_dim_], centroid);
+        transform_data(&data[(uint64_t) i*d], sample_d[i], norm[i],
+            &sample_data[(uint64_t) i*sample_dim_], centroid);
         if (M_ < norm[i]) M_ = norm[i];
     }
 
@@ -139,14 +139,15 @@ FH<DType>::FH(                      // constructor
     // -------------------------------------------------------------------------
     Result *arr = new Result[n];
     for (int i = 0; i < n; ++i) {
-        arr[i].id_  = i;
-        arr[i].key_ = calc_transform_dist(sample_d[i], norm[i], norm_sqr_ctrd, 
+        float val = calc_transform_dist(sample_d[i], norm[i], norm_sqr_ctrd, 
             &sample_data[(uint64_t) i*sample_dim_], centroid);
+        arr[i].id_  = i;
+        arr[i].key_ = val;
     }
     qsort(arr, n, sizeof(Result), ResultCompDesc);
 
-    shift_id_ = new int[n];
-    for (int i = 0; i < n; ++i) shift_id_[i] = arr[i].id_;
+    index_ = new int[n];
+    for (int i = 0; i < n; ++i) index_[i] = arr[i].id_;
 
     // -------------------------------------------------------------------------
     //  divide datasets into blocks and build hash tables for each block
@@ -160,9 +161,8 @@ FH<DType>::FH(                      // constructor
             ++block_index;
             if (++cnt >= MAX_BLOCK_NUM) break;
         }
-
         // add block
-        const int *index = (const int*) shift_id_ + start;
+        const int *index = (const int*) index_ + start;
         RQALSH *hash = new RQALSH(cnt, fh_dim_, m, index);
         for (int i = 0; i < cnt; ++i) {
             // calc the hash values of P*f(o)
@@ -281,7 +281,7 @@ float FH<DType>::calc_transform_dist(// calc l2-dist after transform
 template<class DType>
 FH<DType>::~FH()                    // destructor
 {
-    delete[] shift_id_;
+    delete[] index_;
     if (!hash_.empty()) {
         for (auto& hash : hash_) delete hash;
         std::vector<RQALSH*>().swap(hash_);
@@ -317,30 +317,31 @@ int FH<DType>::nns(                 // point-to-hyperplane NNS
     transform_query(query, sample_d, sample_query);
     
     // point-to-hyperplane NNS
-    int   idx, size, verif_cnt = 0, n_cand = cand+top_k-1;
-    float kfn_dist, kdist, dist, fix_val = 2*M_;
     std::vector<int> cand_list;
+    int   cand_cnt = 0, n_cand = cand + top_k - 1;
+    float fix_val  = 2 * M_;
     
     for (auto hash : hash_) {
         // check candidates returned by rqalsh
-        kfn_dist = -1.0f;
+        float kfn_dist = -1.0f;
         if (list->isFull()) {
-            kdist = list->max_key();
+            float kdist = list->max_key();
             kfn_dist = sqrt(fix_val - 2*kdist*kdist);
         }
-        size = hash->fns(l, n_cand, kfn_dist, sample_d, sample_query, cand_list);
-        for (int j = 0; j < size; ++j) {
-            idx  = cand_list[j];
-            dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        int size = hash->fns(l, n_cand, kfn_dist, sample_d, sample_query, 
+            cand_list);
+        for (int idx : cand_list) {
+            const DType *point = &data_[(uint64_t) idx*dim_];
+            float dist = fabs(calc_ip2<DType>(dim_, point, query));
             list->insert(dist, idx + 1);
         }
         // update info
-        verif_cnt += size; n_cand -= size;
+        cand_cnt += size; n_cand -= size;
         if (n_cand <= 0) break;
     }
     delete[] sample_query;
 
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
@@ -434,7 +435,7 @@ public:
         uint64_t ret = 0;
         ret += sizeof(*this);
         ret += sizeof(float)*fh_dim_; // centroid_
-        ret += sizeof(int)*n_;        // shift_id_
+        ret += sizeof(int)*n_;        // index_
         for (auto hash : hash_) {     // blocks_
             ret += hash->get_memory_usage();
         }
@@ -448,7 +449,7 @@ protected:
     float M_;                       // max l2-norm sqr of o'
     const DType *data_;             // original data objects
 
-    int *shift_id_;                 // shift data id
+    int   *index_;                  // shift data id
     std::vector<RQALSH*> hash_;     // blocks
 
     // -------------------------------------------------------------------------
@@ -521,8 +522,8 @@ FH_wo_S<DType>::FH_wo_S(            // constructor
     }
     qsort(arr, n, sizeof(Result), ResultCompDesc);
 
-    shift_id_ = new int[n];
-    for (int i = 0; i < n; ++i) shift_id_[i] = arr[i].id_;
+    index_ = new int[n];
+    for (int i = 0; i < n; ++i) index_[i] = arr[i].id_;
 
     // divide datasets into blocks and build hash tables for each block
     float *fh_data = new float[fh_dim_]; // P*f(o)
@@ -537,7 +538,7 @@ FH_wo_S<DType>::FH_wo_S(            // constructor
         }
 
         // add block
-        const int *index = (const int*) shift_id_ + start;
+        const int *index = (const int*) index_ + start;
         RQALSH *hash = new RQALSH(cnt, fh_dim_, m, index);
         for (int i = 0; i < cnt; ++i) {
             // calc hash values
@@ -655,7 +656,7 @@ void FH_wo_S<DType>::transform_data(// data transformation
 template<class DType>
 FH_wo_S<DType>::~FH_wo_S()          // destructor
 {
-    delete[] shift_id_;
+    delete[] index_;
     if (!hash_.empty()) {
         for (auto hash : hash_) delete hash;
         std::vector<RQALSH*>().swap(hash_);
@@ -689,30 +690,30 @@ int FH_wo_S<DType>::nns(            // point-to-hyperplane NNS
     transform_query(query, fh_query);
     
     // point-to-hyperplane NNS
-    int   idx, size, verif_cnt = 0, n_cand = cand+top_k-1;
-    float kfn_dist, kdist, dist, fix_val = 2*M_;
     std::vector<int> cand_list;
-    
+    int   cand_cnt = 0, n_cand = cand + top_k - 1;
+    float fix_val  = 2*M_;
+
     for (auto hash : hash_) {
         // check candidates returned by rqalsh
-        kfn_dist = -1.0f;
+        float kfn_dist = -1.0f;
         if (list->isFull()) {
-            kdist = list->max_key();
+            float kdist = list->max_key();
             kfn_dist = sqrt(fix_val - 2*kdist*kdist);
         }
-        size = hash->fns(l, n_cand, kfn_dist, fh_query, cand_list);
-        for (int j = 0; j < size; ++j) {
-            idx  = cand_list[j];
-            dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        int size = hash->fns(l, n_cand, kfn_dist, fh_query, cand_list);
+        for (int idx : cand_list) {
+            const DType *point = &data_[(uint64_t) idx*dim_];
+            float dist = fabs(calc_ip2<DType>(dim_, point, query));
             list->insert(dist, idx + 1);
         }
         // update info
-        verif_cnt += size; n_cand -= size; 
+        cand_cnt += size; n_cand -= size;
         if (n_cand <= 0) break;
     }
     delete[] fh_query;
 
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------

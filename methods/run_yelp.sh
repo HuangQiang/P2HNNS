@@ -79,7 +79,7 @@ do
   # done
 
   # # ----------------------------------------------------------------------------
-  # # FH (Furthest Hyperpalne Hash)
+  # FH (Furthest Hyperpalne Hash)
   # for m in 8 16 32 64 128 256
   # do
   #   for s in 1 2 4 8

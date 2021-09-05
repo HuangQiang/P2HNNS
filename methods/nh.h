@@ -159,13 +159,11 @@ void NH<DType>::get_sig_data_partial(// get signature of data
     norm = transform_data(data, sample_d, sample_data);
 
     // calc the signature of sample_data
-    int   idx = -1;
-    float val = 0.0f;
     for (int i = 0; i < m_; ++i) {
         const float *proja = (const float*) &proja_[i*nh_dim_];
-        val = 0.0f;
+        float val = 0.0f;
         for (int j = 0; j < sample_d; ++j) {
-            idx = sample_data[j].id_;
+            int idx = sample_data[j].id_;
             val += proja[idx] * sample_data[j].key_;
         }
         projs[i] = val;
@@ -266,16 +264,16 @@ int NH<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(m_);
     get_sig_query(query, &sigs[0]);
 
-    // printf("cand=%d\n", cand);
-    int   verif_cnt = 0, step = (cand+m_-1)/m_;
-    float dist = -1.0f;
+    int cand_cnt = 0;
+    int step = (cand + m_ - 1) / m_;
     bucketerp_.for_candidates(step, sigs, [&](int idx) {
         // verify the true distance of idx
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        const DType *point = &data_[(uint64_t)idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
         list->insert(dist, idx+1);
-        ++verif_cnt;
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
@@ -290,13 +288,11 @@ void NH<DType>::get_sig_query( // get signature of query
     transform_query(query, sample_d, sample_query);
 
     // calc the signature of sample_data
-    int   idx = -1;
-    float val = 0.0f;
     for (int i = 0; i < m_; ++i) {
         const float *proja = (const float*) &proja_[i*nh_dim_];
-        val = 0.0f;
+        float val = 0.0f;
         for (int j = 0; j < sample_d; ++j) {
-            idx = sample_query[j].id_;
+            int idx = sample_query[j].id_;
             val += proja[idx] * sample_query[j].key_;
         }
         sig[i] = SigType((val + projb_[i])/w_);
@@ -573,16 +569,16 @@ int NH_wo_S<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(m_);
     get_sig_query(query, &sigs[0]);
 
-    // printf("cand=%d\n", cand);
-    int   verif_cnt = 0, step = (cand+m_-1)/m_;
-    float dist = -1.0f;
+    int cand_cnt = 0;
+    int step = (cand + m_ - 1) / m_;
     bucketerp_.for_candidates(step, sigs, [&](int idx) {
         // verify the true distance of idx
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t)idx*dim_], query));
+        const DType *point = &data_[(uint64_t) idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
         list->insert(dist, idx+1);
-        ++verif_cnt;
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------

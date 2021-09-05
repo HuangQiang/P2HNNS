@@ -87,7 +87,6 @@ BH_Hash<DType>::BH_Hash(            // constructor
         proju_[i] = gaussian(0.0f, 1.0f);
         projv_[i] = gaussian(0.0f, 1.0f);
     }
-    
     // build hash table for the hash values of data objects
     std::vector<SigType> sigs(l);
     for (int i = 0; i < n; ++i) {
@@ -136,16 +135,15 @@ int BH_Hash<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(l_);
     get_sig_query(query, sigs);
     
-    int   verif_cnt = 0, did = -1;
-    float dist = -1.0f;
+    int cand_cnt = 0;
     buckets_.for_cand(cand, sigs, [&](int idx) {
         // verify the true distance of idx
-        did  = index_[idx];
-        dist = fabs(calc_ip2<DType>(dim_, &data[(uint64_t)did*dim_], query));
-        list->insert(dist, did+1);
-        ++verif_cnt;
+        const DType *point = &data[(uint64_t) index_[idx]*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        list->insert(dist, index_[idx] + 1);
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
@@ -247,7 +245,6 @@ Orig_BH<DType>::Orig_BH(            // constructor
         proju_[i] = gaussian(0.0f, 1.0f);
         projv_[i] = gaussian(0.0f, 1.0f);
     }
-
     // build hash table for the hash values of data objects
     std::vector<SigType> sigs(l);
     for (int i = 0; i < n; ++i) {
@@ -308,15 +305,16 @@ int Orig_BH<DType>::nns(            // point-to-hyperplane NNS
     std::vector<SigType> sigs(l_);
     get_sig_query(query, sigs);
     
-    int   verif_cnt = 0;
-    float dist = -1.0f;
+    int cand_cnt = 0;
     buckets_.for_cand(cand, sigs, [&](int idx) {
         // verify the true distance of idx
-        dist = fabs(calc_ip2<DType>(dim_, &data_[(uint64_t) idx*dim_], query));
+        const DType *point = &data_[(uint64_t) idx*dim_];
+        float dist = fabs(calc_ip2<DType>(dim_, point, query));
+        
         list->insert(dist, idx + 1);
-        ++verif_cnt;
+        ++cand_cnt;
     });
-    return verif_cnt;
+    return cand_cnt;
 }
 
 // -----------------------------------------------------------------------------
